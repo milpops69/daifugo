@@ -504,11 +504,11 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
   .act-btn     { font-size: 14px; padding: 8px 14px; min-width: 44px; }
 
   /* Рука игрока: горизонтальный скролл, без перекрытия (всё видно) */
-  #harea       { height: 96px; flex: 0 0 96px; padding: 0; }
+  #harea       { height: 96px; flex: 0 0 96px; padding: 0; touch-action: pan-x; }
   #hcards      { height: 96px; padding: 12px 6px 4px; gap: 4px; justify-content: flex-start;
                   overflow-x: auto; overflow-y: visible; -webkit-overflow-scrolling: touch;
-                  scroll-snap-type: x proximity; }
-  #hcards .card-wrap{ scroll-snap-align: start; }
+                  touch-action: pan-x; }
+  #hcards .card-wrap{ touch-action: pan-x; }
   .card-wrap canvas { transform: scale(.7); transform-origin: bottom center; }
 
   /* Тосты/облачка */
@@ -569,6 +569,78 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
 .mp-av-upload{display:flex;align-items:center;justify-content:center;background:var(--bg2);border-style:dashed;}
 .mp-av-plus{font-family:'Press Start 2P',monospace;font-size:22px;color:var(--pink2);}
 .mp-av-upload.has-img .mp-av-plus{display:none;}
+
+/* Аватар + колесо эмоций (мультиплеер) */
+.my-emote{
+  position:fixed;left:10px;bottom:10px;z-index:140;
+  width:54px;height:54px;
+}
+.my-emote.off{display:none;}
+.my-emote-btn{
+  width:54px;height:54px;border-radius:50%;
+  background:var(--surface2);color:var(--pink2);
+  border:3px solid var(--gold2);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  font-size:28px;padding:0;overflow:hidden;
+  box-shadow:0 0 12px rgba(255,204,68,.45);
+  transition:transform .12s;
+}
+.my-emote-btn:hover{transform:scale(1.05);}
+.my-emote-btn img{width:100%;height:100%;object-fit:cover;image-rendering:pixelated;display:block;border-radius:50%;}
+.my-emote-fallback{line-height:1;}
+
+.emote-wheel{
+  position:absolute;left:50%;top:50%;width:0;height:0;
+  pointer-events:none;
+}
+.emote-wheel.open{pointer-events:auto;}
+.emote-pick{
+  position:absolute;left:0;top:0;
+  width:42px;height:42px;margin:-21px 0 0 -21px;
+  border-radius:50%;border:2px solid var(--pink2);
+  background:var(--surface);font-size:22px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;padding:0;
+  opacity:0;transform:translate(0,0) scale(.4);
+  transition:transform .22s cubic-bezier(.22,1,.36,1), opacity .18s;
+  box-shadow:0 0 8px rgba(255,68,153,.4);
+}
+.emote-wheel.open .emote-pick{
+  opacity:1;
+  transform:translate(
+    calc(cos((var(--ang) - 90) * 1deg) * 78px),
+    calc(sin((var(--ang) - 90) * 1deg) * 78px)
+  ) scale(1);
+}
+.emote-pick:hover{background:var(--surface2);border-color:var(--gold2);}
+
+/* Всплывающая эмоция над аватаркой */
+.emote-bubble{
+  position:fixed;z-index:560;pointer-events:none;
+  font-size:36px;line-height:1;
+  filter:drop-shadow(0 2px 4px rgba(0,0,0,.6));
+  animation:emote-pop 2s ease forwards;
+}
+@keyframes emote-pop{
+  0%   { opacity:0; transform: translateY(0) scale(.4); }
+  15%  { opacity:1; transform: translateY(-12px) scale(1.25); }
+  25%  { transform: translateY(-18px) scale(1); }
+  80%  { opacity:1; transform: translateY(-22px) scale(1); }
+  100% { opacity:0; transform: translateY(-32px) scale(.85); }
+}
+
+/* На мобильном — компактнее, чтобы не перекрывало карты */
+@media (max-width: 900px){
+  .my-emote{width:42px;height:42px;left:6px;bottom:6px;}
+  .my-emote-btn{width:42px;height:42px;font-size:22px;border-width:2px;}
+  .emote-pick{width:36px;height:36px;margin:-18px 0 0 -18px;font-size:18px;}
+  .emote-wheel.open .emote-pick{
+    transform:translate(
+      calc(cos((var(--ang) - 90) * 1deg) * 60px),
+      calc(sin((var(--ang) - 90) * 1deg) * 60px)
+    ) scale(1);
+  }
+  .emote-bubble{font-size:28px;}
+}
 
 /* Таймер хода */
 #turn-timer{

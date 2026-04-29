@@ -242,12 +242,134 @@ function show(id)   {
   // Drawer всегда закрываем при смене экрана
   const dr = document.getElementById('mobile-drawer');
   if (dr) dr.classList.remove('open');
+  closeEmoteWheel && closeEmoteWheel();
+  // Аватар-эмоций показываем только в игре в мультиплеере
+  const me = document.getElementById('my-emote');
+  if (me) {
+    const inMP = (typeof MP !== 'undefined' && MP.active);
+    me.classList.toggle('off', !(id === 'game' && inMP));
+    if (id === 'game' && inMP && typeof showMyEmoteAvatar === 'function') showMyEmoteAvatar();
+  }
 }
 
 function toggleDrawer(){
   const dr = document.getElementById('mobile-drawer');
   if (dr) dr.classList.toggle('open');
 }
+
+// ── ЭМОЦИИ (мультиплеер) ───────────────────────────────────
+function showMyEmoteAvatar(){
+  const wrap = document.getElementById('my-emote');
+  const btn  = document.getElementById('my-emote-btn');
+  if (!wrap || !btn) return;
+  const inMP = (typeof MP !== 'undefined' && MP.active);
+  if (!inMP) { wrap.classList.add('off'); return; }
+  wrap.classList.remove('off');
+  // подставляем выбранный аватар
+  btn.innerHTML = '';
+  const av = MP.profile && MP.profile.avatar;
+  let src = null;
+  if (typeof av === 'string' && av.startsWith('data:')) src = av;
+  else if (typeof av === 'number')                       src = `av${(av|0)+1}.jpg`;
+  if (src) {
+    const im = document.createElement('img');
+    im.src = src; im.alt = '';
+    btn.appendChild(im);
+  } else {
+    const sp = document.createElement('span');
+    sp.className = 'my-emote-fallback';
+    sp.textContent = '🙂';
+    btn.appendChild(sp);
+  }
+}
+
+function toggleEmoteWheel(){
+  const w = document.getElementById('emote-wheel');
+  if (w) w.classList.toggle('open');
+}
+function closeEmoteWheel(){
+  const w = document.getElementById('emote-wheel');
+  if (w) w.classList.remove('open');
+}
+
+// Показать пузырёк эмоции над аватаркой указанного места
+function showEmoteAt(seat, emoji){
+  let el;
+  if (typeof MP !== 'undefined' && MP.active && seat === MP.seat) {
+    el = document.getElementById('my-emote-btn');
+  } else {
+    const disp = displayOf(seat);
+    el = document.getElementById('av-' + disp);
+  }
+  if (!el) return;
+  const r = el.getBoundingClientRect();
+  const b = document.createElement('div');
+  b.className = 'emote-bubble';
+  b.textContent = emoji;
+  document.body.appendChild(b);
+  const bw = b.offsetWidth || 36;
+  b.style.left = (r.left + r.width/2 - bw/2) + 'px';
+  b.style.top  = (r.top - 28) + 'px';
+  setTimeout(() => b.remove(), 2050);
+}
+
+function sendEmote(emoji){
+  closeEmoteWheel();
+  const inMP = (typeof MP !== 'undefined' && MP.active);
+  if (!inMP) return;
+  // показываем у себя сразу
+  showEmoteAt(MP.seat, emoji);
+  if (typeof mpSend !== 'function') return;
+  if (MP.seat === 0) {
+    // хост — шлёт каждому гостю напрямую
+    for (const p of MP.peers) {
+      if (p.seat === 0) continue;
+      mpSend({ type:'relay', target: p.seat,
+               data:{ k:'emote', emoji, _from: 0 }});
+    }
+  } else {
+    // гость — шлёт только хосту, тот разошлёт остальным
+    mpSend({ type:'relay', target: 0, data:{ k:'emote', emoji }});
+  }
+}
+
+// Глобальная привязка обработчиков (один раз)
+document.addEventListener('DOMContentLoaded', () => {
+  const btn = document.getElementById('my-emote-btn');
+  if (btn) btn.addEventListener('click', e => { e.stopPropagation(); toggleEmoteWheel(); });
+  document.querySelectorAll('.emote-pick').forEach(b => {
+    b.addEventListener('click', e => {
+      e.stopPropagation();
+      sendEmote(b.dataset.emote);
+    });
+  });
+  // клик вне колеса закрывает его
+  document.addEventListener('click', e => {
+    if (!e.target.closest('.my-emote')) closeEmoteWheel();
+  });
+});
+
+// ── ПОЛНОЭКРАННЫЙ РЕЖИМ + LANDSCAPE LOCK (только мобильные) ──
+let _fsAttempted = false;
+function tryEnterFullscreen() {
+  if (_fsAttempted) return;
+  // Только на мобильных / маленьких экранах
+  if (!(window.matchMedia && window.matchMedia('(max-width: 900px)').matches)) return;
+  _fsAttempted = true;
+  const el = document.documentElement;
+  const req = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen;
+  if (!req) return;
+  Promise.resolve(req.call(el)).then(() => {
+    try {
+      if (screen.orientation && screen.orientation.lock)
+        screen.orientation.lock('landscape').catch(() => {});
+    } catch (_) {}
+  }).catch(() => {});
+}
+// Браузер требует пользовательского жеста — ловим первое касание/клик.
+['click','touchend','keydown'].forEach(ev =>
+  document.addEventListener(ev, tryEnterFullscreen, { passive: true, once: false })
+);
 
 // title card decoration
 (function() {
@@ -759,9 +881,21 @@ function renderHand() {
     wrap.className = cls;
     wrap.dataset.idx = i;
     wrap.appendChild(makeCard(c, SC_HAND));
-    wrap.addEventListener('click', () => { if (!isDragging) { focusIdx = i; toggleCard(i); } });
+
+    // Тап-vs-свайп: если палец сдвинулся больше 8px — это скролл, а не выбор.
+    let _downX = 0, _downY = 0, _moved = false;
+    wrap.addEventListener('pointerdown', e => {
+      _downX = e.clientX; _downY = e.clientY; _moved = false;
+      startDrag(e, i, wrap, c);
+    });
+    wrap.addEventListener('pointermove', e => {
+      if (Math.abs(e.clientX - _downX) > 8 || Math.abs(e.clientY - _downY) > 8) _moved = true;
+    });
+    wrap.addEventListener('click', () => {
+      if (_moved || isDragging) { _moved = false; return; }
+      focusIdx = i; toggleCard(i);
+    });
     if (!isTouch) wrap.addEventListener('mouseenter', () => { focusIdx = i; });
-    wrap.addEventListener('pointerdown', e => startDrag(e, i, wrap, c));
     el.appendChild(wrap);
   });
   // scrollIntoView только на десктопе при навигации стрелочками
