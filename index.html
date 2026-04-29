@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DaiFugo</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="drag-ghost"></div>
+
+<!-- TITLE -->
+<div id="title" class="screen">
+  <canvas id="title-bg"></canvas>
+  <div class="title-frame">
+    <div class="tc-tr"></div><div class="tc-bl"></div>
+    <div class="title-en">DAIFUGO</div>
+    <div class="title-cards" id="title-cards"></div>
+    <div class="px-btns">
+      <button class="px-btn" onclick="goGame()">▶ ИГРАТЬ</button>
+      <button class="px-btn" onclick="goOnline()">СЕТЬ</button>
+      <button class="px-btn" onclick="goRules()">? ПРАВИЛА</button>
+    </div>
+  </div>
+</div>
+
+<!-- ONLINE -->
+<div id="online" class="screen off">
+  <button class="rules-back-btn" onclick="goTitle()" title="Назад">↩</button>
+  <div class="rules-box" style="max-width:380px;padding:14px 18px">
+    <div class="rules-title">◈ СЕТЬ ◈</div>
+
+    <div class="mp-section">
+      <div class="mp-label">ВАШ НИК</div>
+      <input id="mp-name-input" class="mp-input" maxlength="12" placeholder="ИГРОК" style="letter-spacing:2px">
+    </div>
+
+    <div class="mp-section">
+      <div class="mp-label">ВАШ АВАТАР</div>
+      <div id="mp-av-grid" class="mp-av-grid">
+        <div class="mp-av" data-av="0"><img src="av1.jpg" alt=""></div>
+        <div class="mp-av" data-av="1"><img src="av2.jpg" alt=""></div>
+        <div class="mp-av" data-av="2"><img src="av3.jpg" alt=""></div>
+        <div class="mp-av" data-av="3"><img src="av4.jpg" alt=""></div>
+        <div class="mp-av" data-av="4"><img src="av5.jpg" alt=""></div>
+      </div>
+    </div>
+
+    <div class="mp-divider">— —</div>
+
+    <div class="mp-section">
+      <div class="mp-label">СОЗДАТЬ КОМНАТУ</div>
+      <button class="px-btn" onclick="mpCreateRoom()">▶ СОЗДАТЬ</button>
+      <div id="mp-waiting" style="display:none;margin-top:8px;text-align:center">
+        <div class="mp-label" style="color:var(--gold2)">КОД КОМНАТЫ:</div>
+        <div id="mp-code-display" style="font-size:24px;color:var(--pink2);letter-spacing:6px;margin:4px 0"></div>
+      </div>
+    </div>
+    <div class="mp-divider">— или —</div>
+    <div class="mp-section">
+      <div class="mp-label">ВОЙТИ В КОМНАТУ</div>
+      <input id="mp-code-input" class="mp-input" maxlength="4" placeholder="XXXX" oninput="this.value=this.value.toUpperCase()">
+      <button class="px-btn" onclick="mpJoinRoom()">▶ ВОЙТИ</button>
+    </div>
+    <div id="mp-status" class="mp-status"></div>
+  </div>
+</div>
+
+<!-- RULES -->
+<div id="rules" class="screen off">
+  <button class="rules-back-btn" onclick="goTitle()" title="Назад">↩</button>
+  <div class="rules-box">
+    <div class="rules-title">◈ ПРАВИЛА ◈</div>
+    <div class="rules-body">
+      <strong>ЦЕЛЬ:</strong> первым сбросить все карты.<br>
+      <strong>СИЛА:</strong> 3 4 5 6 7 8 9 10 J Q K A 2 Joker<br>
+      <strong>ХОД:</strong> карты той же или большей силы. Кол-во должно совпадать.<br>
+      <strong>ПАС:</strong> нет хода — пасуйте (Пробел / кнопка X).<br>
+      <strong>СЫГРАТЬ:</strong> выберите карты кликом, нажмите Enter или ▶ ИГРАТЬ.<br>
+      <strong>КОНЕЧНАЯ ВОСЬМЕРКА:</strong> восьмёрка сбрасывает стол, снова ваш ход.<br>
+      <strong>РЕВОЛЮЦИЯ:</strong> 4 одного ранга — порядок переворачивается.<br>
+      <strong>ДЖОКЕР:</strong> подставляется вместо любой карты.<br>
+      <strong>ОБМЕН:</strong> после раунда лучшие дают плохие карты худшим.<br>
+      <strong>СБРОС С 10:</strong> сыграв N десяток, можно дополнительно сбросить N любых карт.<br>
+      <strong>3♠:</strong> тройка пик бьёт Джокера.<br>
+      <strong>ВАЛЕТ НАОБОРОТ:</strong> ход валетом инвертирует силу карт только на этот ход.<br>
+    </div>
+  </div>
+</div>
+
+<!-- GAME -->
+<div id="game" class="screen off">
+
+  <!-- BOT 2 top strip -->
+  <div id="bot1-strip">
+    <div class="bot1-chip" id="chip-2">
+      <div class="chip-avatar" id="av-2">🎭</div>
+      <div class="chip-info">
+        <div class="chip-name" id="cn-2">БОТ 2</div>
+      </div>
+      <div id="bot-hand-2" class="bot-hand-row"></div>
+      <div class="chip-pas" id="pas-2">ПАС</div>
+      <div class="chip-badge" id="rb-2"></div>
+    </div>
+  </div>
+
+  <!-- MIDDLE: sidebots + table -->
+  <div id="mid">
+
+    <!-- BOT 1 left -->
+    <div class="sidebot" id="pa-1">
+      <div class="bot-avatar" id="av-1">🤖</div>
+      <div class="bot-name-sm" id="cn-1">БОТ 1</div>
+      <div id="bot-hand-1" class="bot-hand-col"></div>
+      <div class="pas-label" id="pasl-1">ПАС</div>
+      <div class="bot-rbadge" id="brb-1"></div>
+    </div>
+
+    <!-- TABLE -->
+    <div id="tzone">
+      <div id="dropzone">
+        <div id="pcards" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:center"></div>
+      </div>
+      <div class="act-row">
+        <button class="act-btn btn-pass" id="bps" onclick="playerPass()">✕</button>
+        <button class="act-btn btn-play" id="bplay" onclick="playerPlaySelected()">▶ ИГРАТЬ</button>
+      </div>
+    </div>
+
+    <!-- BOT 3 right -->
+    <div class="sidebot" id="pa-3">
+      <div class="bot-avatar" id="av-3">👾</div>
+      <div class="bot-name-sm" id="cn-3">БОТ 3</div>
+      <div id="bot-hand-3" class="bot-hand-col"></div>
+      <div class="pas-label" id="pasl-3">ПАС</div>
+      <div class="bot-rbadge" id="brb-3"></div>
+    </div>
+
+  </div>
+
+  <!-- PLAYER HAND -->
+  <div id="harea">
+    <div id="hcards"></div>
+  </div>
+
+  <!-- floating menu bottom-right -->
+  <div id="float-menu">
+    <div id="rev-badge">⚡ РЕВ</div>
+    <button class="sm-btn" onclick="goTitle()">МЕНЮ</button>
+    <button class="sm-btn" onclick="newGame()">НОВАЯ</button>
+  </div>
+
+</div>
+
+<!-- RESULT OVERLAY -->
+<div id="overlay" class="h">
+  <div class="rbox">
+    <div class="rtitle">◈ ИТОГИ ◈</div>
+    <div class="rsub" id="rsub"></div>
+    <div class="rrows" id="rrows"></div>
+    <button class="px-btn" style="width:100%;padding:10px" onclick="newGame()">▶ ЕЩЁ РАЗ</button>
+    <button class="px-btn" style="width:100%;padding:10px;margin-top:8px" onclick="goTitle()">◀ МЕНЮ</button>
+  </div>
+</div>
+
+<!-- EXCHANGE OVERLAY -->
+<div id="exchange-overlay" class="h">
+  <div class="rbox ex-box">
+    <div class="rtitle" id="ex-title">◈ ОБМЕН КАРТАМИ ◈</div>
+    <div class="ex-body" id="ex-body"></div>
+    <div class="ex-hand-wrap">
+      <div id="ex-hand" class="ex-hand"></div>
+    </div>
+    <button class="px-btn ex-confirm-btn" id="ex-btn" onclick="confirmExchange()">▶ НАЧАТЬ ИГРУ</button>
+  </div>
+</div>
+
+<script src="cards.js"></script>
+<script src="multiplayer.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
