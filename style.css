@@ -431,70 +431,108 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
 /* ════════════════════════════════
    МОБИЛЬНАЯ АДАПТАЦИЯ
 ════════════════════════════════ */
-@media (max-width: 720px) {
-  /* Главное окно — компактнее */
-  .title-frame { padding: 22px 20px; gap: 12px; }
-  .title-en    { font-size: 24px; letter-spacing: 4px; }
-  .title-cards { gap: 4px; transform: scale(.75); transform-origin: center; height: 80px; }
-  .px-btns     { width: 200px; gap: 10px; }
-  .px-btn      { font-size: 9px; padding: 11px 0; }
 
-  /* Правила и онлайн-лобби */
-  .rules-box   { width: 94%; padding: 14px 16px; max-height: 92vh; overflow-y: auto; }
-  .rules-back-btn { top: 10px; left: 10px; width: 38px; height: 38px; font-size: 18px; }
-  .rules-body  { font-size: 16px; }
-  .rules-title { font-size: 9px; }
-  .mp-input    { font-size: 12px; padding: 8px; }
-  .mp-av       { width: 48px; height: 48px; }
-  .mp-count    { width: 42px; height: 36px; font-size: 11px; }
+/* Подсказка повернуть телефон в портретной ориентации */
+.rotate-hint{
+  display:none;position:fixed;inset:0;z-index:9000;
+  background:rgba(8,3,12,.96);color:var(--pink2);
+  flex-direction:column;align-items:center;justify-content:center;
+  font-family:'Press Start 2P',monospace;font-size:11px;
+  text-align:center;padding:20px;line-height:1.6;letter-spacing:1px;
+}
+.rotate-hint .icon{font-size:48px;margin-bottom:14px;animation:rotate-anim 2s ease infinite;}
+@keyframes rotate-anim{0%,100%{transform:rotate(-90deg);}50%{transform:rotate(0deg);}}
 
-  /* Игровое поле */
-  #bot1-strip   { height: 70px; flex: 0 0 70px; padding: 2px; }
+/* Все правила скролла обычные на десктопе — но трогать карты не нужно */
+.card-wrap{ touch-action: manipulation; }
+
+/* На сенсорных устройствах подсветку фокуса карты не показываем */
+@media (hover: none){
+  .card-wrap.focus{ transform: none; filter: none; }
+  .card-wrap.focus.sel{ transform: translateY(-14px); filter: drop-shadow(0 0 6px var(--gold2)); }
+}
+
+/* ── Портретный мобильный — показываем подсказку повернуть ── */
+@media (max-width: 720px) and (orientation: portrait){
+  .rotate-hint{display:flex;}
+  #title, #game, #rules, #online{display:none !important;}
+}
+
+/* ── Меню/Новая на мобильном — drawer вместо float-menu ── */
+@media (max-width: 900px){
+  #float-menu{display:none;}
+  .mobile-drawer{display:block;}
+}
+
+/* ── Общие мобильные стили (≤900px) ── */
+@media (max-width: 900px){
+  /* Title */
+  .title-frame { padding: 16px 18px; gap: 8px; }
+  .title-en    { font-size: 22px; letter-spacing: 3px; }
+  .title-cards { gap: 4px; transform: scale(.6); transform-origin: center; height: 64px; }
+  .px-btns     { width: 200px; gap: 8px; }
+  .px-btn      { font-size: 9px; padding: 10px 0; }
+
+  /* Лобби */
+  .rules-box   { width: 94%; padding: 12px 14px; max-height: 92vh; overflow-y: auto; }
+  .rules-back-btn { top: 8px; left: 8px; width: 36px; height: 36px; font-size: 18px; }
+  .rules-body  { font-size: 15px; line-height: 1.3; }
+  .rules-title { font-size: 9px; margin-bottom: 8px; }
+  .mp-input    { font-size: 12px; padding: 7px; }
+  .mp-av       { width: 44px; height: 44px; }
+  .mp-count    { width: 42px; height: 34px; font-size: 11px; }
+
+  /* Игровое поле — горизонтальный landscape */
+  #bot1-strip   { height: 56px; flex: 0 0 56px; padding: 2px; }
   .bot1-chip    { padding: 0 6px; gap: 5px; }
-  .chip-avatar  { width: 38px; height: 38px; font-size: 22px; border-width: 2px; }
+  .chip-avatar  { width: 32px; height: 32px; font-size: 18px; border-width: 2px; }
   .chip-name    { font-size: 8px; }
   .bot-hand-row { padding: 2px 4px; }
-  .bot-hand-row .bot-card-back { margin-right: -32px; }
+  .bot-hand-row .bot-card-back { margin-right: -34px; transform: scale(.65); transform-origin: center; }
 
-  .sidebot     { width: 64px; flex: 0 0 64px; padding: 4px 2px; gap: 2px; }
-  .bot-avatar  { width: 38px; height: 38px; font-size: 22px; border-width: 2px; }
+  .sidebot     { width: 60px; flex: 0 0 60px; padding: 4px 2px; gap: 2px; }
+  .bot-avatar  { width: 34px; height: 34px; font-size: 18px; border-width: 2px; }
   .bot-name-sm { font-size: 8px; }
-  .bot-hand-col { width: 40px; padding: 2px 0; }
-  .bot-hand-col .bot-card-back { margin-bottom: -54px; transform: scale(.7); transform-origin: center; }
+  .bot-hand-col { width: 36px; padding: 2px 0; }
+  .bot-hand-col .bot-card-back { margin-bottom: -56px; transform: scale(.55); transform-origin: center; }
 
-  #tzone       { padding: 4px; gap: 4px; }
+  #tzone       { padding: 3px; gap: 3px; }
   #dropzone    { padding: 4px; }
-  .act-btn     { font-size: 9px; padding: 10px 12px; }
 
-  #harea       { height: 120px; flex: 0 0 120px; padding: 0 4px; }
-  #hcards      { height: 116px; padding: 16px 0 4px; gap: 1px; }
-  .card-wrap   { touch-action: none; }
-  .card-wrap canvas { transform: scale(.85); transform-origin: bottom center; }
+  /* Кнопки действий — компактнее на мобиле */
+  .act-row     { gap: 6px; }
+  .act-btn     { font-size: 14px; padding: 8px 14px; min-width: 44px; }
 
-  /* Floating menu */
-  #float-menu  { bottom: 4px; right: 4px; gap: 4px; }
-  .sm-btn      { font-size: 8px; padding: 5px 7px; }
-  #rev-badge   { font-size: 8px; padding: 3px 5px; }
+  /* Рука игрока: горизонтальный скролл, без перекрытия (всё видно) */
+  #harea       { height: 96px; flex: 0 0 96px; padding: 0; }
+  #hcards      { height: 96px; padding: 12px 6px 4px; gap: 4px; justify-content: flex-start;
+                  overflow-x: auto; overflow-y: visible; -webkit-overflow-scrolling: touch;
+                  scroll-snap-type: x proximity; }
+  #hcards .card-wrap{ scroll-snap-align: start; }
+  .card-wrap canvas { transform: scale(.7); transform-origin: bottom center; }
 
-  /* Результаты / обмен */
-  .rbox        { width: 92%; padding: 16px 18px; }
+  /* Тосты/облачка */
+  .pas-bubble  { font-size: 14px; padding: 6px 10px; letter-spacing: 2px; }
+  .toast       { font-size: 9px; padding: 8px 14px; }
+
+  /* Результаты */
+  .rbox        { width: 92%; padding: 14px 16px; }
   .rtitle      { font-size: 9px; }
   .rrow        { font-size: 16px; padding: 5px 7px; }
 
-  /* Pas-облачко поменьше на мобилке */
-  .pas-bubble  { font-size: 16px; padding: 6px 12px; letter-spacing: 2px; }
-  .toast       { font-size: 9px; padding: 9px 16px; }
+  /* Таймер заметнее на мобиле */
+  #turn-timer  { height: 6px; flex: 0 0 6px; }
 }
 
-/* Совсем узкие экраны (телефоны портретно) */
-@media (max-width: 420px) {
-  .sidebot     { width: 54px; flex: 0 0 54px; }
-  .bot-avatar  { width: 32px; height: 32px; font-size: 18px; }
-  .bot-hand-col { width: 36px; }
-  .chip-avatar { width: 32px; height: 32px; font-size: 18px; }
-  .title-en    { font-size: 20px; letter-spacing: 3px; }
-  .px-btns     { width: 180px; }
-  .px-btn      { font-size: 8px; padding: 10px 0; }
+/* Совсем узкие landscape экраны (≤620px по ширине) */
+@media (max-width: 620px){
+  .sidebot     { width: 50px; flex: 0 0 50px; }
+  .bot-avatar  { width: 30px; height: 30px; font-size: 16px; }
+  .bot-hand-col { width: 32px; }
+  .chip-avatar { width: 28px; height: 28px; font-size: 16px; }
+  #harea       { height: 88px; flex: 0 0 88px; }
+  #hcards      { height: 88px; padding: 8px 4px 2px; }
+  .card-wrap canvas { transform: scale(.62); }
 }
 .mp-av-grid{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;}
 .mp-av{
@@ -521,3 +559,49 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
 .mp-roster .row{display:flex;align-items:center;gap:6px;background:var(--bg2);padding:3px 6px;border:1px solid var(--border);}
 .mp-roster img{width:22px;height:22px;border-radius:3px;image-rendering:pixelated;}
 .mp-roster .row.me{border-color:var(--gold2);}
+
+/* Двухшаговое лобби */
+#online .op-step{display:none;}
+#online[data-step="profile"] .op-profile{display:block;}
+#online[data-step="room"]    .op-room   {display:block;}
+
+/* Кастомный аватар */
+.mp-av-upload{display:flex;align-items:center;justify-content:center;background:var(--bg2);border-style:dashed;}
+.mp-av-plus{font-family:'Press Start 2P',monospace;font-size:22px;color:var(--pink2);}
+.mp-av-upload.has-img .mp-av-plus{display:none;}
+
+/* Таймер хода */
+#turn-timer{
+  position:relative;height:5px;background:#1a0820;
+  flex:0 0 5px;width:100%;
+  border-top:1px solid #3a1030;border-bottom:1px solid #3a1030;
+  opacity:0;transition:opacity .2s;
+}
+#turn-timer-bar{
+  height:100%;width:100%;background:var(--green);
+  transition:width .12s linear, background .2s;
+}
+
+/* Мобильный drawer (меню/новая) */
+.mobile-drawer{
+  display:none;position:fixed;right:0;top:50%;
+  transform:translate(100%,-50%);z-index:120;
+  transition:transform .25s ease;
+}
+.mobile-drawer.open{transform:translate(0,-50%);}
+.mobile-drawer .drawer-tab{
+  position:absolute;left:-26px;top:50%;transform:translateY(-50%);
+  width:26px;height:60px;
+  background:var(--surface);color:var(--pink2);border:0;
+  border-left:2px solid var(--pink2);border-top:2px solid var(--pink2);
+  border-bottom:2px solid var(--pink2);
+  font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;
+  border-radius:8px 0 0 8px;
+}
+.mobile-drawer.open .drawer-tab{transform:translateY(-50%) rotate(180deg);}
+.mobile-drawer .drawer-content{
+  display:flex;flex-direction:column;gap:6px;padding:8px;
+  background:var(--surface);border:2px solid var(--pink2);
+}
+.mobile-drawer .sm-btn{font-size:9px;padding:8px 10px;}
+.mobile-drawer #rev-badge{position:static;display:none;font-size:8px;}

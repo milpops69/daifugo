@@ -25,10 +25,12 @@
 </div>
 
 <!-- ONLINE -->
-<div id="online" class="screen off">
-  <button class="rules-back-btn" onclick="goTitle()" title="Назад">↩</button>
-  <div class="rules-box" style="max-width:380px;padding:14px 18px">
-    <div class="rules-title">◈ МУЛЬТИПЛЕЕР ◈</div>
+<div id="online" class="screen off" data-step="profile">
+  <button class="rules-back-btn" id="online-back" onclick="onlineBack()" title="Назад">↩</button>
+
+  <!-- Шаг 1: профиль -->
+  <div class="rules-box op-step op-profile" style="max-width:380px;padding:14px 18px">
+    <div class="rules-title">◈ ПРОФИЛЬ ◈</div>
 
     <div class="mp-section">
       <div class="mp-label">ВАШ НИК</div>
@@ -43,15 +45,24 @@
         <div class="mp-av" data-av="2"><img src="av3.jpg" alt=""></div>
         <div class="mp-av" data-av="3"><img src="av4.jpg" alt=""></div>
         <div class="mp-av" data-av="4"><img src="av5.jpg" alt=""></div>
+        <div class="mp-av mp-av-upload" id="mp-av-custom" title="Загрузить свою">
+          <span class="mp-av-plus">+</span>
+        </div>
       </div>
+      <input type="file" id="mp-av-file" accept="image/*" style="display:none">
     </div>
 
-    <div class="mp-divider">— —</div>
+    <div class="mp-status" id="mp-status-prof"></div>
+    <button class="px-btn" style="width:100%" onclick="mpToRoomStep()">ДАЛЬШЕ ▶</button>
+  </div>
+
+  <!-- Шаг 2: комната -->
+  <div class="rules-box op-step op-room" style="max-width:380px;padding:14px 18px">
+    <div class="rules-title">◈ КОМНАТА ◈</div>
 
     <div class="mp-section">
       <div class="mp-label">СОЗДАТЬ КОМНАТУ</div>
       <div class="mp-count-row" id="mp-count-row">
-        <button class="mp-count" data-n="2">2</button>
         <button class="mp-count" data-n="3">3</button>
         <button class="mp-count sel" data-n="4">4</button>
       </div>
@@ -129,7 +140,7 @@
       </div>
       <div class="act-row">
         <button class="act-btn btn-pass" id="bps" onclick="playerPass()">✕</button>
-        <button class="act-btn btn-play" id="bplay" onclick="playerPlaySelected()">▶ ИГРАТЬ</button>
+        <button class="act-btn btn-play" id="bplay" onclick="playerPlaySelected()" title="Сыграть">▶</button>
       </div>
     </div>
 
@@ -144,18 +155,36 @@
 
   </div>
 
+  <!-- TURN TIMER -->
+  <div id="turn-timer"><div id="turn-timer-bar"></div></div>
+
   <!-- PLAYER HAND -->
   <div id="harea">
     <div id="hcards"></div>
   </div>
 
-  <!-- floating menu bottom-right -->
+  <!-- floating menu bottom-right (desktop) -->
   <div id="float-menu">
     <div id="rev-badge">⚡ РЕВ</div>
     <button class="sm-btn" onclick="goTitle()">МЕНЮ</button>
     <button class="sm-btn" onclick="newGame()">НОВАЯ</button>
   </div>
 
+  <!-- mobile drawer (hidden on desktop) -->
+  <div class="mobile-drawer" id="mobile-drawer">
+    <button class="drawer-tab" onclick="toggleDrawer()" title="Меню">◀</button>
+    <div class="drawer-content">
+      <button class="sm-btn" onclick="goTitle()">МЕНЮ</button>
+      <button class="sm-btn" onclick="newGame()">НОВАЯ</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- Подсказка повернуть телефон (только в портретной ориентации на мобильном) -->
+<div class="rotate-hint">
+  <div class="icon">📱</div>
+  ПОВЕРНИТЕ<br>УСТРОЙСТВО<br>ГОРИЗОНТАЛЬНО
 </div>
 
 <!-- RESULT OVERLAY -->

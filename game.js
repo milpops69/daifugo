@@ -160,11 +160,60 @@ let GAME_GEN = 0;
 let focusIdx = 0;
 function gameAlive(gen) { return gen === GAME_GEN && G && !G.aborted; }
 
+// ── ТАЙМЕР ХОДА ───────────────────────────────────────────
+// 20 секунд на ход; если игрок не успевает — автоматический пас.
+const TURN_LIMIT_MS = 20000;
+let _timerHandle = null;
+let _timerEnd    = 0;
+let _lastTimerTurn = -1;
+
+function clearTurnTimer(){
+  if (_timerHandle) { clearInterval(_timerHandle); _timerHandle = null; }
+  _timerEnd = 0;
+  updateTimerUi(0, false);
+}
+
+function startTurnTimer(){
+  clearTurnTimer();
+  if (!G || G.gameOver) return;
+  const mp = myPlayer();
+  // Таймер запускается только когда ходим именно мы
+  if (G.turn !== mp || G.finished.includes(mp)) return;
+  _timerEnd = Date.now() + TURN_LIMIT_MS;
+  _timerHandle = setInterval(() => {
+    const remain = _timerEnd - Date.now();
+    if (remain <= 0) {
+      clearTurnTimer();
+      const m = myPlayer();
+      if (G && !G.gameOver && !G.busy && G.turn === m && !G.finished.includes(m)) {
+        toast('ВРЕМЯ ВЫШЛО — ПАС');
+        playerPass();
+      }
+    } else {
+      updateTimerUi(remain, true);
+    }
+  }, 100);
+}
+
+function updateTimerUi(remain, active){
+  const wrap = document.getElementById('turn-timer');
+  const bar  = document.getElementById('turn-timer-bar');
+  if (!wrap || !bar) return;
+  if (!active) { wrap.style.opacity = '0'; bar.style.width = '0%'; return; }
+  wrap.style.opacity = '1';
+  const pct = Math.max(0, Math.min(100, (remain / TURN_LIMIT_MS) * 100));
+  bar.style.width = pct + '%';
+  if (remain < 5000)       bar.style.background = 'var(--rose)';
+  else if (remain < 10000) bar.style.background = 'var(--gold2)';
+  else                     bar.style.background = 'var(--green)';
+}
+
 // ── NAV ──────────────────────────────────────────────────
 function goTitle() {
   // Abort any in-flight game: invalidate timers, clear state, kill flying cards
   GAME_GEN++;
   if (G) G.aborted = true;
+  _pileSig = ''; _lastTimerTurn = -1; clearTurnTimer();
   G = { hands:[[],[],[],[]], currentCombo:null, pile:[], revolution:false,
         turn:0, passCount:0, finished:[], rankings:[], gameOver:true, busy:false,
         aborted:true, numPlayers: 4 };
@@ -190,6 +239,14 @@ function goOnline() {
 function show(id)   {
   ['title','rules','game','online'].forEach(s =>
     document.getElementById(s).classList.toggle('off', s !== id));
+  // Drawer всегда закрываем при смене экрана
+  const dr = document.getElementById('mobile-drawer');
+  if (dr) dr.classList.remove('open');
+}
+
+function toggleDrawer(){
+  const dr = document.getElementById('mobile-drawer');
+  if (dr) dr.classList.toggle('open');
 }
 
 // title card decoration
@@ -369,6 +426,8 @@ function startGameWithHands(hands) {
 
   focusIdx = 0;
   GAME_GEN++;
+  _pileSig = '';
+  _lastTimerTurn = -1;
   G = {
     hands, currentCombo: null, pile: [],
     revolution: false, turn: start,
@@ -607,7 +666,11 @@ function assignBotPersonalities(N) {
     if (inMP && peerBySeat[seat]) {
       const peer = peerBySeat[seat];
       name   = peer.name || 'Игрок';
-      avatar = AVATARS[Math.max(0, Math.min(AVATARS.length-1, peer.avatar|0))];
+      if (typeof peer.avatar === 'string' && peer.avatar.startsWith('data:')) {
+        avatar = { src: peer.avatar, emoji: '🖼' };
+      } else {
+        avatar = AVATARS[Math.max(0, Math.min(AVATARS.length-1, peer.avatar|0))];
+      }
       accent = colPool[pi % colPool.length];
     } else {
       name   = namePool[pi % namePool.length];
@@ -634,6 +697,12 @@ function render() {
   renderPile();
   renderActive();
   renderStatus();
+  // перезапуск таймера только при реальной смене хода / при game over
+  const turnKey = G.gameOver ? 'over' : G.turn;
+  if (turnKey !== _lastTimerTurn) {
+    _lastTimerTurn = turnKey;
+    startTurnTimer();
+  }
   if (typeof mpSendState === 'function' && typeof MP !== 'undefined' && MP.active && MP.seat === 0)
     mpSendState();
 }
@@ -680,31 +749,47 @@ function renderHand() {
   const hand = G.hands[mp];
   if (focusIdx >= hand.length) focusIdx = Math.max(0, hand.length - 1);
 
+  // Касательное устройство — фокус не подсвечиваем и автоматический scrollIntoView не делаем
+  const isTouch = (window.matchMedia && window.matchMedia('(hover: none)').matches);
+
   hand.forEach((c, i) => {
     const wrap = document.createElement('div');
-    wrap.className = 'card-wrap' + (c.sel ? ' sel' : '') + (i === focusIdx ? ' focus' : '');
+    let cls = 'card-wrap' + (c.sel ? ' sel' : '');
+    if (!isTouch && i === focusIdx) cls += ' focus';
+    wrap.className = cls;
     wrap.dataset.idx = i;
     wrap.appendChild(makeCard(c, SC_HAND));
     wrap.addEventListener('click', () => { if (!isDragging) { focusIdx = i; toggleCard(i); } });
-    wrap.addEventListener('mouseenter', () => { focusIdx = i; });
+    if (!isTouch) wrap.addEventListener('mouseenter', () => { focusIdx = i; });
     wrap.addEventListener('pointerdown', e => startDrag(e, i, wrap, c));
     el.appendChild(wrap);
   });
-  // scroll focused card into view if hand overflows
-  const focusEl = el.children[focusIdx];
-  if (focusEl) focusEl.scrollIntoView({ block: 'nearest', inline: 'center' });
+  // scrollIntoView только на десктопе при навигации стрелочками
+  if (!isTouch) {
+    const focusEl = el.children[focusIdx];
+    if (focusEl) focusEl.scrollIntoView({ block: 'nearest', inline: 'center' });
+  }
 }
 
+let _pileSig = '';
 function renderPile() {
   const pc = document.getElementById('pcards');
-  pc.innerHTML = '';
-  if (G.currentCombo && G.currentCombo.cards.length) {
-    G.currentCombo.cards.forEach(c => {
-      const w = document.createElement('div');
-      w.className = 'pile-card-wrap';
-      w.appendChild(makeCard(c, SC_PILE));
-      pc.appendChild(w);
-    });
+  // Пересчитываем стол только если комбо реально изменилось — иначе карты
+  // на столе не должны проигрывать анимацию каждый раз когда обновляется рука.
+  const sig = G.currentCombo
+    ? G.currentCombo.cards.map(c => c.id).join('|') + ':' + (G.revolution ? 'R' : '')
+    : '';
+  if (sig !== _pileSig) {
+    _pileSig = sig;
+    pc.innerHTML = '';
+    if (G.currentCombo && G.currentCombo.cards.length) {
+      G.currentCombo.cards.forEach(c => {
+        const w = document.createElement('div');
+        w.className = 'pile-card-wrap';
+        w.appendChild(makeCard(c, SC_PILE));
+        pc.appendChild(w);
+      });
+    }
   }
   document.getElementById('rev-badge').style.display = G.revolution ? 'block' : 'none';
 }
@@ -736,6 +821,9 @@ let isDragging = false;
 let dragData   = null;
 
 function startDrag(e, idx, wrap, card) {
+  // На тач-устройствах не цепляемся за drag — даём пальцу спокойно
+  // скроллить руку и тапать по картам.
+  if (e.pointerType === 'touch') return;
   const mp = myPlayer();
   if (G.turn!==mp||G.finished.includes(mp)||G.gameOver||G.busy) return;
   e.preventDefault(); isDragging = false;
