@@ -18,7 +18,7 @@
     <div class="title-cards" id="title-cards"></div>
     <div class="px-btns">
       <button class="px-btn" onclick="goGame()">▶ ИГРАТЬ</button>
-      <button class="px-btn" onclick="goOnline()">СЕТЬ</button>
+      <button class="px-btn" onclick="goOnline()">МУЛЬТИПЛЕЕР</button>
       <button class="px-btn" onclick="goRules()">? ПРАВИЛА</button>
     </div>
   </div>
@@ -28,7 +28,7 @@
 <div id="online" class="screen off">
   <button class="rules-back-btn" onclick="goTitle()" title="Назад">↩</button>
   <div class="rules-box" style="max-width:380px;padding:14px 18px">
-    <div class="rules-title">◈ СЕТЬ ◈</div>
+    <div class="rules-title">◈ МУЛЬТИПЛЕЕР ◈</div>
 
     <div class="mp-section">
       <div class="mp-label">ВАШ НИК</div>
@@ -50,10 +50,16 @@
 
     <div class="mp-section">
       <div class="mp-label">СОЗДАТЬ КОМНАТУ</div>
+      <div class="mp-count-row" id="mp-count-row">
+        <button class="mp-count" data-n="2">2</button>
+        <button class="mp-count" data-n="3">3</button>
+        <button class="mp-count sel" data-n="4">4</button>
+      </div>
       <button class="px-btn" onclick="mpCreateRoom()">▶ СОЗДАТЬ</button>
       <div id="mp-waiting" style="display:none;margin-top:8px;text-align:center">
         <div class="mp-label" style="color:var(--gold2)">КОД КОМНАТЫ:</div>
         <div id="mp-code-display" style="font-size:24px;color:var(--pink2);letter-spacing:6px;margin:4px 0"></div>
+        <div id="mp-roster" class="mp-roster"></div>
       </div>
     </div>
     <div class="mp-divider">— или —</div>

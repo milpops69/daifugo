@@ -1,4 +1,40 @@
-@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323:wght@400&display=swap');
+/* ── ЛОКАЛЬНЫЕ ШРИФТЫ — грузятся с того же сервера, не зависят от Google ── */
+@font-face {
+  font-family: 'Press Start 2P';
+  font-style: normal; font-weight: 400; font-display: swap;
+  src: url('fonts/psp-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Press Start 2P';
+  font-style: normal; font-weight: 400; font-display: swap;
+  src: url('fonts/psp-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Press Start 2P';
+  font-style: normal; font-weight: 400; font-display: swap;
+  src: url('fonts/psp-cyrillic.woff2') format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+@font-face {
+  font-family: 'Press Start 2P';
+  font-style: normal; font-weight: 400; font-display: swap;
+  src: url('fonts/psp-cyrillic-ext.woff2') format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+@font-face {
+  font-family: 'VT323';
+  font-style: normal; font-weight: 400; font-display: swap;
+  src: url('fonts/vt323-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'VT323';
+  font-style: normal; font-weight: 400; font-display: swap;
+  src: url('fonts/vt323-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
 
 :root {
   --bg:#0d080e; --bg2:#150a16; --surface:#1a0c1c; --surface2:#220f24;
@@ -391,6 +427,75 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
 .mp-input::placeholder{color:#553344;letter-spacing:4px;}
 .mp-input:focus{border-color:var(--gold2);}
 .mp-status{font-family:'VT323',monospace;font-size:16px;color:var(--pink3);min-height:18px;text-align:center;margin-top:6px;line-height:1.2;}
+
+/* ════════════════════════════════
+   МОБИЛЬНАЯ АДАПТАЦИЯ
+════════════════════════════════ */
+@media (max-width: 720px) {
+  /* Главное окно — компактнее */
+  .title-frame { padding: 22px 20px; gap: 12px; }
+  .title-en    { font-size: 24px; letter-spacing: 4px; }
+  .title-cards { gap: 4px; transform: scale(.75); transform-origin: center; height: 80px; }
+  .px-btns     { width: 200px; gap: 10px; }
+  .px-btn      { font-size: 9px; padding: 11px 0; }
+
+  /* Правила и онлайн-лобби */
+  .rules-box   { width: 94%; padding: 14px 16px; max-height: 92vh; overflow-y: auto; }
+  .rules-back-btn { top: 10px; left: 10px; width: 38px; height: 38px; font-size: 18px; }
+  .rules-body  { font-size: 16px; }
+  .rules-title { font-size: 9px; }
+  .mp-input    { font-size: 12px; padding: 8px; }
+  .mp-av       { width: 48px; height: 48px; }
+  .mp-count    { width: 42px; height: 36px; font-size: 11px; }
+
+  /* Игровое поле */
+  #bot1-strip   { height: 70px; flex: 0 0 70px; padding: 2px; }
+  .bot1-chip    { padding: 0 6px; gap: 5px; }
+  .chip-avatar  { width: 38px; height: 38px; font-size: 22px; border-width: 2px; }
+  .chip-name    { font-size: 8px; }
+  .bot-hand-row { padding: 2px 4px; }
+  .bot-hand-row .bot-card-back { margin-right: -32px; }
+
+  .sidebot     { width: 64px; flex: 0 0 64px; padding: 4px 2px; gap: 2px; }
+  .bot-avatar  { width: 38px; height: 38px; font-size: 22px; border-width: 2px; }
+  .bot-name-sm { font-size: 8px; }
+  .bot-hand-col { width: 40px; padding: 2px 0; }
+  .bot-hand-col .bot-card-back { margin-bottom: -54px; transform: scale(.7); transform-origin: center; }
+
+  #tzone       { padding: 4px; gap: 4px; }
+  #dropzone    { padding: 4px; }
+  .act-btn     { font-size: 9px; padding: 10px 12px; }
+
+  #harea       { height: 120px; flex: 0 0 120px; padding: 0 4px; }
+  #hcards      { height: 116px; padding: 16px 0 4px; gap: 1px; }
+  .card-wrap   { touch-action: none; }
+  .card-wrap canvas { transform: scale(.85); transform-origin: bottom center; }
+
+  /* Floating menu */
+  #float-menu  { bottom: 4px; right: 4px; gap: 4px; }
+  .sm-btn      { font-size: 8px; padding: 5px 7px; }
+  #rev-badge   { font-size: 8px; padding: 3px 5px; }
+
+  /* Результаты / обмен */
+  .rbox        { width: 92%; padding: 16px 18px; }
+  .rtitle      { font-size: 9px; }
+  .rrow        { font-size: 16px; padding: 5px 7px; }
+
+  /* Pas-облачко поменьше на мобилке */
+  .pas-bubble  { font-size: 16px; padding: 6px 12px; letter-spacing: 2px; }
+  .toast       { font-size: 9px; padding: 9px 16px; }
+}
+
+/* Совсем узкие экраны (телефоны портретно) */
+@media (max-width: 420px) {
+  .sidebot     { width: 54px; flex: 0 0 54px; }
+  .bot-avatar  { width: 32px; height: 32px; font-size: 18px; }
+  .bot-hand-col { width: 36px; }
+  .chip-avatar { width: 32px; height: 32px; font-size: 18px; }
+  .title-en    { font-size: 20px; letter-spacing: 3px; }
+  .px-btns     { width: 180px; }
+  .px-btn      { font-size: 8px; padding: 10px 0; }
+}
 .mp-av-grid{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;}
 .mp-av{
   width:54px;height:54px;border:3px solid var(--border);background:var(--surface2);
@@ -399,3 +504,20 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
 .mp-av img{width:100%;height:100%;object-fit:cover;image-rendering:pixelated;display:block;}
 .mp-av:hover{transform:translateY(-2px);border-color:var(--pink2);}
 .mp-av.sel{border-color:var(--gold2);box-shadow:0 0 12px rgba(255,204,68,.6);transform:translateY(-2px);}
+.mp-count-row{display:flex;gap:6px;justify-content:center;}
+.mp-count{
+  font-family:'Press Start 2P',monospace;font-size:12px;
+  width:48px;height:38px;cursor:pointer;
+  background:var(--surface);color:var(--pink2);
+  border:0;border-right:3px solid var(--bg);border-bottom:3px solid var(--bg);
+  border-left:3px solid var(--pink2);border-top:3px solid var(--pink2);
+  transition:all .05s;}
+.mp-count:hover{background:var(--surface2);color:var(--gold2);}
+.mp-count.sel{background:var(--surface2);color:var(--gold2);
+  border-left-color:var(--gold2);border-top-color:var(--gold2);
+  box-shadow:0 0 10px rgba(255,204,68,.5);}
+.mp-roster{display:flex;flex-direction:column;gap:4px;margin-top:8px;
+  font-family:'VT323',monospace;font-size:15px;color:var(--text);text-align:left;}
+.mp-roster .row{display:flex;align-items:center;gap:6px;background:var(--bg2);padding:3px 6px;border:1px solid var(--border);}
+.mp-roster img{width:22px;height:22px;border-radius:3px;image-rendering:pixelated;}
+.mp-roster .row.me{border-color:var(--gold2);}

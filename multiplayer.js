@@ -1,32 +1,34 @@
 // ============================================================
-//  multiplayer.js — WebSocket lobby & state sync for DaiFugo
+//  multiplayer.js — лобби и сетевой обмен (2-4 игрока, без ботов)
 // ============================================================
 
-const MP = { ws: null, seat: null, room: null, active: false,
-             profile: { name: 'ИГРОК', avatar: 0 }, peer: null };
-// WS на том же хосте/порту, что и страница, по пути /ws.
-// Работает и локально (ws://localhost:8000/ws), и на Render (wss://app.onrender.com/ws).
+const MP = {
+  ws: null,
+  seat: null,           // мой seat 0..N-1
+  numPlayers: 0,
+  room: null,
+  active: false,
+  profile: { name: 'ИГРОК', avatar: 0 },
+  peers: [],            // [{seat, name, avatar}] — все игроки, включая меня
+  selectedCount: 4,     // выбор хоста при создании
+};
+
 const WS_PROTO = (location.protocol === 'https:') ? 'wss:' : 'ws:';
 const WS_URL   = `${WS_PROTO}//${location.host}/ws`;
 
+// ── ПРОФИЛЬ ────────────────────────────────────────────────
 function mpReadProfile() {
   const inp  = document.getElementById('mp-name-input');
   const name = (inp && inp.value.trim()) || '';
   const sel  = document.querySelector('#mp-av-grid .mp-av.sel');
-  if (!name) {
-    mpSetStatus('Введите ник', '#ff5555');
-    return null;
-  }
-  if (!sel) {
-    mpSetStatus('Выберите аватар', '#ff5555');
-    return null;
-  }
-  const avatar = parseInt(sel.dataset.av, 10);
-  MP.profile = { name: name.slice(0, 12), avatar };
+  if (!name) { mpSetStatus('Введите ник', '#ff5555'); return null; }
+  if (!sel)  { mpSetStatus('Выберите аватар', '#ff5555'); return null; }
+  MP.profile = { name: name.slice(0, 12), avatar: parseInt(sel.dataset.av, 10) };
   return MP.profile;
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  // выбор аватара
   const grid = document.getElementById('mp-av-grid');
   if (grid) {
     const cells = grid.querySelectorAll('.mp-av');
@@ -34,38 +36,35 @@ document.addEventListener('DOMContentLoaded', () => {
       cells.forEach(x => x.classList.remove('sel'));
       c.classList.add('sel');
     }));
-    // не выбираем аватар по умолчанию — пусть пользователь выберет сам
+  }
+  // выбор кол-ва игроков
+  const cnt = document.getElementById('mp-count-row');
+  if (cnt) {
+    const btns = cnt.querySelectorAll('.mp-count');
+    btns.forEach(b => b.addEventListener('click', () => {
+      btns.forEach(x => x.classList.remove('sel'));
+      b.classList.add('sel');
+      MP.selectedCount = parseInt(b.dataset.n, 10);
+    }));
   }
 });
 
-// ── CONNECTION ────────────────────────────────────────────
+// ── СОЕДИНЕНИЕ ─────────────────────────────────────────────
 function mpConnect(onOpen) {
-  // Sanity checks before opening the socket
   if (location.protocol === 'file:') {
-    mpSetStatus('Откройте http://localhost:8000 (не файл!)', '#ff5555');
-    return;
-  }
-  if (!location.hostname) {
-    mpSetStatus('Нет адреса хоста. Откройте через http://…', '#ff5555');
-    return;
+    mpSetStatus('Откройте через http://… (не файл)', '#ff5555'); return;
   }
   if (MP.ws) { try { MP.ws.close(); } catch(_){} }
   try { MP.ws = new WebSocket(WS_URL); }
-  catch (err) { mpSetStatus('Ошибка WebSocket: ' + err.message, '#ff5555'); return; }
+  catch (err) { mpSetStatus('Ошибка WS: ' + err.message, '#ff5555'); return; }
 
   let opened = false;
   MP.ws.onopen    = () => { opened = true; if (onOpen) onOpen(); };
   MP.ws.onmessage = e => mpHandleMsg(JSON.parse(e.data));
-  MP.ws.onerror   = () => {
-    mpSetStatus('Нет связи с ' + WS_URL +
-      ' — проверьте, что server.py запущен и установлен пакет websockets', '#ff5555');
-  };
+  MP.ws.onerror   = () => { mpSetStatus('Нет связи с сервером', '#ff5555'); };
   MP.ws.onclose   = () => {
     if (MP.active) { toast('СОЕДИНЕНИЕ ПОТЕРЯНО'); MP.active = false; goTitle(); }
-    else if (!opened) {
-      mpSetStatus('Сервер не отвечает на ' + WS_URL +
-        '. Запустите: pip install websockets, затем python server.py', '#ff5555');
-    }
+    else if (!opened) mpSetStatus('Сервер не отвечает', '#ff5555');
   };
 }
 
@@ -74,7 +73,6 @@ function mpSend(obj) {
     MP.ws.send(JSON.stringify(obj));
 }
 
-// ── UI HELPERS ────────────────────────────────────────────
 function mpSetStatus(txt, col) {
   const el = document.getElementById('mp-status');
   if (el) { el.textContent = txt; el.style.color = col || '#ffaadd'; }
@@ -82,55 +80,66 @@ function mpSetStatus(txt, col) {
 
 function goOnline() { show('online'); mpSetStatus(''); }
 
-// ── CREATE ROOM ───────────────────────────────────────────
+// ── СОЗДАТЬ / ВОЙТИ ────────────────────────────────────────
 function mpCreateRoom() {
   if (!mpReadProfile()) return;
   mpSetStatus('Подключение…');
-  mpConnect(() => mpSend({ type: 'create', profile: MP.profile }));
+  mpConnect(() => mpSend({ type: 'create',
+                            max_players: MP.selectedCount,
+                            profile: MP.profile }));
 }
 
-// ── JOIN ROOM ─────────────────────────────────────────────
 function mpJoinRoom() {
-  const inp = document.getElementById('mp-code-input');
+  const inp  = document.getElementById('mp-code-input');
   const code = inp ? inp.value.trim().toUpperCase() : '';
-  if (code.length < 2) { mpSetStatus('Введите код!', '#ff5555'); return; }
+  if (code.length < 2) { mpSetStatus('Введите код', '#ff5555'); return; }
   if (!mpReadProfile()) return;
   mpSetStatus('Подключение…');
   mpConnect(() => mpSend({ type: 'join', code, profile: MP.profile }));
 }
 
-// ── MESSAGE HANDLER ───────────────────────────────────────
+// ── ОБРАБОТКА СООБЩЕНИЙ ────────────────────────────────────
 function mpHandleMsg(msg) {
   if (msg.type === 'created') {
-    MP.seat = 0; MP.room = msg.code; MP.active = false;
-    mpSetStatus('Код комнаты: ' + msg.code + ' — ждём гостя…', '#ffcc44');
+    MP.seat = msg.seat;
+    MP.numPlayers = msg.max;
+    MP.room = msg.code;
+    MP.active = false;
     document.getElementById('mp-code-display').textContent = msg.code;
     document.getElementById('mp-waiting').style.display = 'block';
-  }
-  else if (msg.type === 'guest_joined') {
-    MP.active = true;
-    MP.peer = msg.profile || { name: 'Гость', avatar: 1 };
-    mpSetStatus('Гость подключился! Начинаем…', '#44ff88');
-    setTimeout(() => { show('game'); mpStartGame(); }, 600);
+    mpSetStatus('Ожидаем игроков…', '#ffcc44');
   }
   else if (msg.type === 'joined') {
-    MP.seat = 1; MP.room = msg.code; MP.active = true;
-    MP.peer = msg.host_profile || { name: 'Хост', avatar: 0 };
-    mpSetStatus('Подключено! Ожидаем старта…', '#44ff88');
-    show('game');
-    G = { hands:[[],[],[],[]], currentCombo:null, pile:[],
-          revolution:false, turn:0, passCount:0,
-          finished:[], rankings:[], gameOver:false, busy:false, roundNum:1 };
-    render();
+    MP.seat = msg.seat;
+    MP.numPlayers = msg.max;
+    MP.room = msg.code;
+    MP.active = false;
+    document.getElementById('mp-code-display').textContent = msg.code;
+    document.getElementById('mp-waiting').style.display = 'block';
+    mpUpdateRoster(msg.players || []);
+    mpSetStatus('Ожидаем игроков…', '#ffcc44');
+  }
+  else if (msg.type === 'lobby_update') {
+    MP.numPlayers = msg.max;
+    mpUpdateRoster(msg.players || []);
+    const cur = (msg.players || []).length;
+    mpSetStatus(`Ожидаем игроков… ${cur}/${msg.max}`, '#ffcc44');
+  }
+  else if (msg.type === 'start') {
+    MP.peers = msg.players || [];
+    MP.numPlayers = msg.max;
+    MP.active = true;
+    mpSetStatus('Все собрались! Начинаем…', '#44ff88');
+    setTimeout(() => { show('game'); mpStartGame(); }, 600);
   }
   else if (msg.type === 'relay') {
-    const data = msg.data;
+    const data = msg.data, from = msg.from;
     if (!data) return;
-    if (MP.seat === 0) mpApplyGuestAction(data);
-    else               mpApplyHostState(data);
+    if (MP.seat === 0) mpHostHandle(from, data);
+    else               mpGuestHandle(from, data);
   }
   else if (msg.type === 'opponent_left') {
-    toast('ПРОТИВНИК ОТКЛЮЧИЛСЯ');
+    toast('ИГРОК ВЫШЕЛ');
     MP.active = false;
     setTimeout(goTitle, 1800);
   }
@@ -139,46 +148,83 @@ function mpHandleMsg(msg) {
   }
 }
 
-// ── HOST: start game ──────────────────────────────────────
+function mpUpdateRoster(players) {
+  const el = document.getElementById('mp-roster');
+  if (!el) return;
+  el.innerHTML = '';
+  players.forEach(p => {
+    const row = document.createElement('div');
+    row.className = 'row' + (p.seat === MP.seat ? ' me' : '');
+    const img = document.createElement('img');
+    img.src = `av${(p.avatar|0)+1}.jpg`;
+    img.alt = '';
+    const nm = document.createElement('div');
+    nm.textContent = p.name || ('Игрок ' + (p.seat+1));
+    row.appendChild(img); row.appendChild(nm);
+    el.appendChild(row);
+  });
+}
+
+// ── СТАРТ ИГРЫ ─────────────────────────────────────────────
 function mpStartGame() {
   prevRankings = null;
-  newGame();
+  if (MP.seat === 0) {
+    // Хост запускает игру (newGame() сам расставит профили из MP.peers)
+    newGame();
+  } else {
+    // Гость: ожидает первое состояние от хоста.
+    // Сразу применяем layout и расставляем аватары/имена соперников.
+    G = { hands: Array.from({length: MP.numPlayers}, () => []),
+          currentCombo:null, pile:[], revolution:false,
+          turn:0, passCount:0, finished:[], rankings:[],
+          gameOver:false, busy:false, roundNum:1,
+          numPlayers: MP.numPlayers };
+    if (typeof applyLayoutForN === 'function') applyLayoutForN(MP.numPlayers);
+    if (typeof assignBotPersonalities === 'function') assignBotPersonalities(MP.numPlayers);
+    render();
+  }
 }
 
-// ── HOST: send state to guest ─────────────────────────────
+// ── ХОСТ → ВСЕМ: рассылка состояния ────────────────────────
 function mpSendState() {
   if (!MP.active || MP.seat !== 0) return;
-  // send guest's real hand; mask all others
-  const maskedHands = G.hands.map((h, i) =>
-    i === 1
-      ? h.map(c => ({ r: c.r, s: c.s, id: c.id, sel: false }))
-      : h.map(c => ({ r: '?',  s: '?',  id: c.id, sel: false }))
-  );
-  mpSend({ type: 'relay', data: {
-    k: 'state',
-    hands:        maskedHands,
-    handLens:     G.hands.map(h => h.length),
-    currentCombo: G.currentCombo,
-    revolution:   G.revolution,
-    turn:         G.turn,
-    passCount:    G.passCount,
-    finished:     G.finished,
-    rankings:     G.rankings,
-    gameOver:     G.gameOver,
-    roundNum:     G.roundNum || 1
-  }});
+  // Каждому гостю шлём своё состояние с раскрытой только его рукой
+  for (const p of MP.peers) {
+    if (p.seat === 0) continue;
+    const maskedHands = G.hands.map((h, i) =>
+      i === p.seat
+        ? h.map(c => ({ r: c.r, s: c.s, id: c.id, sel: false }))
+        : h.map(c => ({ r: '?',  s: '?',  id: c.id, sel: false }))
+    );
+    mpSend({ type: 'relay', target: p.seat, data: {
+      k: 'state',
+      hands:        maskedHands,
+      currentCombo: G.currentCombo,
+      revolution:   G.revolution,
+      turn:         G.turn,
+      passCount:    G.passCount,
+      finished:     G.finished,
+      rankings:     G.rankings,
+      gameOver:     G.gameOver,
+      roundNum:     G.roundNum || 1,
+      numPlayers:   G.numPlayers,
+    }});
+  }
 }
 
-// ── GUEST: apply state from host ──────────────────────────
-function mpApplyHostState(data) {
-  if (data.k !== 'state') return;
-  // preserve local sel state on guest's hand
-  const oldHand = (G.hands && G.hands[1]) || [];
+// ── ГОСТЬ ← ХОСТ: применить состояние ──────────────────────
+function mpGuestHandle(fromSeat, data) {
+  if (data.k !== 'state') {
+    if (data.k === 'err') { sndError(); toast(data.msg || 'НЕЛЬЗЯ'); }
+    return;
+  }
+  const my = MP.seat;
+  const oldHand = (G.hands && G.hands[my]) || [];
   const selMap  = {};
   oldHand.forEach(c => { if (c.sel) selMap[c.id] = true; });
 
   G.hands = data.hands.map((h, i) =>
-    h.map(c => ({ ...c, sel: (i === 1 && selMap[c.id]) || false }))
+    h.map(c => ({ ...c, sel: (i === my && selMap[c.id]) || false }))
   );
   G.currentCombo = data.currentCombo;
   G.revolution   = data.revolution;
@@ -188,45 +234,49 @@ function mpApplyHostState(data) {
   G.rankings     = data.rankings;
   G.gameOver     = data.gameOver;
   G.roundNum     = data.roundNum;
+  G.numPlayers   = data.numPlayers;
   G.busy         = false;
   render();
   if (G.gameOver) setTimeout(showResults, 1400);
 }
 
-// ── GUEST: send action to host ────────────────────────────
+// ── ГОСТЬ → ХОСТУ: действие ────────────────────────────────
 function mpGuestPlay(cardIds) {
-  mpSend({ type: 'relay', data: { k: 'play', cardIds } });
-  G.hands[1].forEach(c => c.sel = false);
+  mpSend({ type: 'relay', target: 0, data: { k: 'play', cardIds } });
+  G.hands[MP.seat].forEach(c => c.sel = false);
   render();
 }
 function mpGuestPass() {
-  mpSend({ type: 'relay', data: { k: 'pass' } });
+  mpSend({ type: 'relay', target: 0, data: { k: 'pass' } });
 }
 
-// ── HOST: apply guest action ──────────────────────────────
-function mpApplyGuestAction(data) {
-  if (G.turn !== 1 || G.finished.includes(1) || G.gameOver) return;
+// ── ХОСТ ← ГОСТЬ: обработать действие ──────────────────────
+function mpHostHandle(fromSeat, data) {
+  if (G.gameOver) return;
+  if (G.turn !== fromSeat || G.finished.includes(fromSeat)) return;
   if (data.k === 'pass') {
     sndPass();
-    doPass(1);
+    doPass(fromSeat);
   } else if (data.k === 'play') {
     const cards = (data.cardIds || [])
-      .map(id => G.hands[1].find(c => c.id === id))
+      .map(id => G.hands[fromSeat].find(c => c.id === id))
       .filter(Boolean);
     if (!cards.length) return;
     const res = validate(cards);
-    if (!res.ok) { mpSend({ type:'relay', data:{ k:'err', msg:res.msg }}); return; }
+    if (!res.ok) {
+      mpSend({ type:'relay', target: fromSeat,
+               data:{ k:'err', msg:res.msg }});
+      return;
+    }
     sndCard();
-    flyCards(cards, cards.map(() => getBotPos(1)), () => commitPlay(1, cards, res));
-  } else if (data.k === 'err') {
-    sndError();
-    toast(data.msg);
+    flyCards(cards, cards.map(() => getBotPos(fromSeat)),
+             () => commitPlay(fromSeat, cards, res));
   }
 }
 
-// ── DISCONNECT ────────────────────────────────────────────
+// ── ВЫХОД ──────────────────────────────────────────────────
 function mpLeave() {
   MP.active = false;
   if (MP.ws) { try { MP.ws.close(); } catch(_){} MP.ws = null; }
-  MP.seat = null; MP.room = null;
+  MP.seat = null; MP.room = null; MP.peers = []; MP.numPlayers = 0;
 }

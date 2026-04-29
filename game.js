@@ -105,21 +105,31 @@ document.addEventListener('mousedown', e => {
 // ── HELPERS ───────────────────────────────────────────────
 function myPlayer() { return (typeof MP !== 'undefined' && MP.active) ? MP.seat : 0; }
 
-// Display position 0 = bottom (self); 1 = left sidebot; 2 = top strip; 3 = right sidebot.
-// In MP, guest (seat=1) sees host (seat=0) in the left sidebot.
+// Display: 0 = снизу (я), 1 = слева (sidebot), 2 = сверху (top strip), 3 = справа (sidebot)
+// REL_TO_DISP: для каждого N — какие display-слоты заняты и куда сажаем соседей.
+// rel = (seat - me + N) % N — это позиция игрока относительно меня по часовой стрелке.
+const REL_TO_DISP = {
+  2: { 1: 2 },                // я + один напротив (сверху)
+  3: { 1: 1, 2: 3 },          // я + слева + справа
+  4: { 1: 1, 2: 2, 3: 3 },    // я + лево/верх/право
+};
+function getN() { return (G && G.numPlayers) || 4; }
 function displayOf(seat) {
   const mp = myPlayer();
   if (seat === mp) return 0;
-  if (mp === 0) return seat;
-  if (seat === 0) return 1;
-  return seat;
+  const N = getN();
+  const rel = ((seat - mp) % N + N) % N;
+  return (REL_TO_DISP[N] && REL_TO_DISP[N][rel]) || 0;
 }
 function seatOf(disp) {
   const mp = myPlayer();
   if (disp === 0) return mp;
-  if (mp === 0) return disp;
-  if (disp === 1) return 0;
-  return disp;
+  const N = getN();
+  for (let s = 0; s < N; s++) {
+    if (s === mp) continue;
+    if (displayOf(s) === disp) return s;
+  }
+  return -1;
 }
 
 function cardStr(r, rev) {
@@ -157,7 +167,7 @@ function goTitle() {
   if (G) G.aborted = true;
   G = { hands:[[],[],[],[]], currentCombo:null, pile:[], revolution:false,
         turn:0, passCount:0, finished:[], rankings:[], gameOver:true, busy:false,
-        aborted:true };
+        aborted:true, numPlayers: 4 };
   document.querySelectorAll('.toast').forEach(t => t.remove());
   document.querySelectorAll('.pas-bubble').forEach(b => b.remove());
   // remove flying card canvases stuck mid-animation
@@ -174,6 +184,8 @@ function goOnline() {
   show('online');
   const w = document.getElementById('mp-waiting');
   if (w) w.style.display = 'none';
+  const r = document.getElementById('mp-roster');
+  if (r) r.innerHTML = '';
 }
 function show(id)   {
   ['title','rules','game','online'].forEach(s =>
@@ -298,12 +310,34 @@ document.addEventListener('keydown', e => {
   }
 });
 
+// Сколько игроков в текущей партии. В одиночной — всегда 4 (1 человек + 3 бота).
+// В мультиплеере — то, что выбрал хост (2/3/4).
+function currentNumPlayers() {
+  if (typeof MP !== 'undefined' && MP.active) return MP.numPlayers || 2;
+  return 4;
+}
+
+// Скрываем UI-слоты, которые не используются при выбранном N
+function applyLayoutForN(N) {
+  const used = REL_TO_DISP[N] || REL_TO_DISP[4];
+  const inUse = new Set(Object.values(used));
+  const top   = document.getElementById('bot1-strip');
+  const left  = document.getElementById('pa-1');
+  const right = document.getElementById('pa-3');
+  if (top)   top.style.display   = inUse.has(2) ? '' : 'none';
+  if (left)  left.style.display  = inUse.has(1) ? '' : 'none';
+  if (right) right.style.display = inUse.has(3) ? '' : 'none';
+}
+
 // ── NEW GAME ──────────────────────────────────────────────
 function newGame() {
   document.getElementById('overlay').classList.add('h');
   document.getElementById('exchange-overlay').classList.add('h');
   clearAllPas();
-  assignBotPersonalities();
+
+  const N = currentNumPlayers();
+  applyLayoutForN(N);
+  assignBotPersonalities(N);
 
   for (let i = 1; i <= 3; i++) {
     const rb = document.getElementById('rb-' + i);
@@ -314,11 +348,13 @@ function newGame() {
   updateScoreDisplay();
 
   const deck = shuffle(mkDeck());
-  const hands = [[],[],[],[]];
-  deck.forEach((c,i) => hands[i%4].push(c));
+  const hands = Array.from({length: N}, () => []);
+  deck.forEach((c,i) => hands[i % N].push(c));
   hands.forEach(h => h.sort((a,b) => STR[a.r]-STR[b.r]));
 
-  if (prevRankings && prevRankings.length === 4) {
+  // Обмен после раунда — только в одиночной игре с 4 участниками
+  const inMP = (typeof MP !== 'undefined' && MP.active);
+  if (!inMP && N === 4 && prevRankings && prevRankings.length === 4) {
     showExchange(hands, prevRankings);
     return;
   }
@@ -327,6 +363,7 @@ function newGame() {
 }
 
 function startGameWithHands(hands) {
+  const N = hands.length;
   let start = hands.findIndex(h => h.some(c => c.r==='3' && c.s==='♠'));
   if (start < 0) start = 0;
 
@@ -337,11 +374,15 @@ function startGameWithHands(hands) {
     revolution: false, turn: start,
     passCount: 0, finished: [], rankings: [],
     gameOver: false, busy: false, aborted: false,
-    roundNum: gamesPlayed + 1
+    roundNum: gamesPlayed + 1,
+    numPlayers: N,
   };
 
+  applyLayoutForN(N);
   render();
-  if (G.turn !== myPlayer()) schedBot();
+  // В мультиплеере боты не запускаются — каждый ход за человеком
+  const inMP = (typeof MP !== 'undefined' && MP.active);
+  if (!inMP && G.turn !== myPlayer()) schedBot();
 }
 
 // ── CARD EXCHANGE ─────────────────────────────────────────
@@ -539,32 +580,41 @@ function setAvatar(el, av) {
 
 const BOT_COLORS = ['#4488ff','#44ff88','#ffaa44','#cc66ff','#ff6688','#66e0ff','#ffcc44','#aaff66'];
 
-function assignBotPersonalities() {
-  const namePool = shuffle([...JP_NAMES]).slice(0, 3);
-  const avPool   = shuffle([...AVATARS]).slice(0, 3);
-  const colPool  = shuffle([...BOT_COLORS]).slice(0, 3);
+function assignBotPersonalities(N) {
+  N = N || 4;
+  const namePool = shuffle([...JP_NAMES]);
+  const avPool   = shuffle([...AVATARS]);
+  const colPool  = shuffle([...BOT_COLORS]);
 
-  // disp position 1 = left sidebot, 2 = top strip, 3 = right sidebot
   const slots = [
     { disp: 1, avEl: 'av-1', nmEl: 'cn-1' },
     { disp: 2, avEl: 'av-2', nmEl: 'cn-2' },
     { disp: 3, avEl: 'av-3', nmEl: 'cn-3' },
   ];
   const inMP = (typeof MP !== 'undefined' && MP.active);
+  // Карта seat -> профиль игрока в MP
+  const peerBySeat = {};
+  if (inMP && MP.peers) MP.peers.forEach(p => peerBySeat[p.seat] = p);
 
-  slots.forEach((s, i) => {
+  // подгоняем размер NAMES под N
+  while (NAMES.length < N) NAMES.push('Игрок ' + (NAMES.length + 1));
+
+  let pi = 0;
+  slots.forEach(s => {
     const seat = seatOf(s.disp);
+    if (seat < 0) return; // слот не используется при текущем N
     let name, avatar, accent;
-    if (inMP && seat !== myPlayer() && (seat === 0 || seat === 1) && MP.peer) {
-      // human opponent — use their chosen profile
-      name   = MP.peer.name || 'Игрок';
-      avatar = AVATARS[Math.max(0, Math.min(AVATARS.length-1, MP.peer.avatar|0))];
-      accent = colPool[i];
+    if (inMP && peerBySeat[seat]) {
+      const peer = peerBySeat[seat];
+      name   = peer.name || 'Игрок';
+      avatar = AVATARS[Math.max(0, Math.min(AVATARS.length-1, peer.avatar|0))];
+      accent = colPool[pi % colPool.length];
     } else {
-      name   = namePool[i];
-      avatar = avPool[i];
-      accent = colPool[i];
+      name   = namePool[pi % namePool.length];
+      avatar = avPool[pi % avPool.length];
+      accent = colPool[pi % colPool.length];
     }
+    pi++;
     NAMES[seat] = name;
     const nm = document.getElementById(s.nmEl);
     if (nm) nm.textContent = name;
@@ -572,6 +622,8 @@ function assignBotPersonalities() {
     setAvatar(avEl, avatar);
     if (avEl) avEl.style.setProperty('--bot-accent', accent);
   });
+  // моё имя в MP
+  if (inMP) NAMES[MP.seat] = (MP.profile && MP.profile.name) || 'Я';
 }
 
 // ── RENDER ────────────────────────────────────────────────
@@ -587,7 +639,8 @@ function render() {
 }
 
 function renderCounts() {
-  for (let i = 0; i < 4; i++) {
+  const N = (G.hands && G.hands.length) || 0;
+  for (let i = 0; i < N; i++) {
     const el = document.getElementById('cc-' + i);
     if (el) el.textContent = G.hands[i].length ? G.hands[i].length + ' кар' : '';
     const bc = document.getElementById('bc-' + i);
@@ -601,6 +654,7 @@ function renderBotHands() {
     if (!el) return;
     el.innerHTML = '';
     const seat = seatOf(disp);
+    if (seat < 0 || !G.hands[seat]) return;
     const n = G.hands[seat].length;
     if (!n) return;
     const done = G.finished.includes(seat);
@@ -633,7 +687,7 @@ function renderHand() {
     wrap.appendChild(makeCard(c, SC_HAND));
     wrap.addEventListener('click', () => { if (!isDragging) { focusIdx = i; toggleCard(i); } });
     wrap.addEventListener('mouseenter', () => { focusIdx = i; });
-    wrap.addEventListener('mousedown', e => startDrag(e, i, wrap, c));
+    wrap.addEventListener('pointerdown', e => startDrag(e, i, wrap, c));
     el.appendChild(wrap);
   });
   // scroll focused card into view if hand overflows
@@ -658,14 +712,14 @@ function renderPile() {
 function renderActive() {
   const seat2 = seatOf(2);
   const ch2 = document.getElementById('chip-2');
-  if (ch2) {
+  if (ch2 && seat2 >= 0) {
     ch2.classList.toggle('active', G.turn===seat2 && !G.finished.includes(seat2));
     ch2.classList.toggle('done', G.finished.includes(seat2));
   }
   [1,3].forEach(disp => {
     const seat = seatOf(disp);
     const sb = document.getElementById('pa-' + disp);
-    if (!sb) return;
+    if (!sb || seat < 0) return;
     sb.classList.toggle('active', G.turn===seat && !G.finished.includes(seat));
     sb.classList.toggle('done', G.finished.includes(seat));
   });
@@ -706,8 +760,9 @@ function startDrag(e, idx, wrap, card) {
       ev.clientX>=r.left&&ev.clientX<=r.right&&ev.clientY>=r.top&&ev.clientY<=r.bottom);
   };
   const onUp = ev => {
-    document.removeEventListener('mousemove', onMove);
-    document.removeEventListener('mouseup',   onUp);
+    document.removeEventListener('pointermove', onMove);
+    document.removeEventListener('pointerup',   onUp);
+    document.removeEventListener('pointercancel', onUp);
     ghost.style.display = 'none';
     dz.classList.remove('dragover');
     const r = dz.getBoundingClientRect();
@@ -717,8 +772,9 @@ function startDrag(e, idx, wrap, card) {
     wrap.classList.remove('dragging');
   };
   wrap.classList.add('dragging');
-  document.addEventListener('mousemove', onMove);
-  document.addEventListener('mouseup',   onUp);
+  document.addEventListener('pointermove', onMove);
+  document.addEventListener('pointerup',   onUp);
+  document.addEventListener('pointercancel', onUp);
 }
 
 function tryPlayerPlay(cards) {
@@ -733,7 +789,10 @@ function playerPlaySelected() {
   if (G.turn!==mp||G.finished.includes(mp)||G.gameOver||G.busy) return;
   const sel = G.hands[mp].filter(c => c.sel);
   if (!sel.length) { toast('ВЫБЕРИТЕ КАРТЫ'); return; }
-  if (mp === 1 && typeof mpGuestPlay === 'function') { mpGuestPlay(sel.map(c => c.id)); return; }
+  if (typeof MP !== 'undefined' && MP.active && MP.seat > 0
+      && typeof mpGuestPlay === 'function') {
+    mpGuestPlay(sel.map(c => c.id)); return;
+  }
   tryPlayerPlay(sel);
 }
 
@@ -820,7 +879,9 @@ function toggleCard(idx) {
 function playerPass() {
   const mp = myPlayer();
   if (G.turn!==mp||G.finished.includes(mp)||G.gameOver||G.busy) return;
-  if (mp === 1 && typeof mpGuestPass === 'function') { mpGuestPass(); return; }
+  // В мультиплеере гость (seat>0) отправляет действие хосту
+  if (typeof MP !== 'undefined' && MP.active && MP.seat > 0
+      && typeof mpGuestPass === 'function') { mpGuestPass(); return; }
   sndPass();
   doPass(mp);
 }
@@ -935,9 +996,9 @@ function clearAllPas() {
 }
 
 function doPass(who) {
-  if (who !== 0) showPas(who);
+  if (who !== myPlayer()) showPas(who);
   G.passCount++;
-  const active = 4 - G.finished.length;
+  const active = (G.numPlayers || 4) - G.finished.length;
   if (G.currentCombo && G.passCount >= active-1) {
     render();
     const gen = GAME_GEN;
@@ -961,8 +1022,9 @@ function nextTurn(from) {
 }
 
 function nextActive(from) {
-  let n=(from+1)%4, t=0;
-  while (G.finished.includes(n) && t<4) { n=(n+1)%4; t++; }
+  const N = G.numPlayers || 4;
+  let n=(from+1)%N, t=0;
+  while (G.finished.includes(n) && t<N) { n=(n+1)%N; t++; }
   return n;
 }
 
@@ -980,8 +1042,9 @@ function finishPlayer(who) {
 
   toast(NAMES[who]+': '+RANK_NAMES[ri]+'!');
 
-  if (4-G.finished.length<=1) {
-    for (let i=0; i<4; i++) if (!G.finished.includes(i)) {
+  const N = G.numPlayers || 4;
+  if (N - G.finished.length <= 1) {
+    for (let i=0; i<N; i++) if (!G.finished.includes(i)) {
       G.finished.push(i);
       G.rankings.push({player:i, rank:G.rankings.length});
       const ri2 = G.rankings.length-1;
@@ -1030,6 +1093,8 @@ function showResults() {
 
 // ── BOT AI ────────────────────────────────────────────────
 function schedBot() {
+  // В мультиплеере боты не используются — каждый ход за человеком.
+  if (typeof MP !== 'undefined' && MP.active) return;
   if (G.busy) return; G.busy=true;
   const gen = GAME_GEN;
   setTimeout(() => {
