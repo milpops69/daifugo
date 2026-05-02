@@ -305,11 +305,6 @@ function mpSendState() {
 
 // ── ГОСТЬ ← ХОСТ: применить состояние ──────────────────────
 function mpGuestHandle(fromSeat, data) {
-  if (data.k === 'emote') {
-    const origin = (typeof data._from === 'number') ? data._from : fromSeat;
-    if (typeof showEmoteAt === 'function') showEmoteAt(origin, data.emoji);
-    return;
-  }
   if (data.k !== 'state') {
     if (data.k === 'err') { sndError(); toast(data.msg || 'НЕЛЬЗЯ'); }
     return;
@@ -348,16 +343,6 @@ function mpGuestPass() {
 
 // ── ХОСТ ← ГОСТЬ: обработать действие ──────────────────────
 function mpHostHandle(fromSeat, data) {
-  // Эмоции ходят отдельно — без проверки очерёдности и завершения игры
-  if (data.k === 'emote') {
-    if (typeof showEmoteAt === 'function') showEmoteAt(fromSeat, data.emoji);
-    // Перенаправляем эмоцию остальным игрокам, кроме отправителя и нас (хоста — мы уже показали)
-    for (const p of MP.peers) {
-      if (p.seat === 0 || p.seat === fromSeat) continue;
-      mpSend({ type:'relay', target: p.seat, data:{ k:'emote', emoji: data.emoji, _from: fromSeat } });
-    }
-    return;
-  }
   if (G.gameOver) return;
   if (G.turn !== fromSeat || G.finished.includes(fromSeat)) return;
   if (data.k === 'pass') {

@@ -303,14 +303,19 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
   height:136px;flex:0 0 136px;
   background:#080308;border-top:4px solid var(--pink);
   padding:0 10px;
-  display:flex;align-items:flex-end;overflow:hidden;}
+  display:flex;align-items:flex-end;
+  overflow-x:hidden;overflow-y:visible;
+  touch-action:pan-x;}
 #hcards{
   display:flex;flex-wrap:nowrap;gap:3px;
   align-items:flex-end;justify-content:center;
   overflow-x:auto;overflow-y:visible;
-  height:130px;flex-shrink:0;
+  height:130px;
+  flex:1 1 auto;min-width:0;width:100%;
   padding:18px 0 4px;
+  touch-action:pan-x;
   scrollbar-width:thin;scrollbar-color:var(--pink) var(--surface);}
+#hcards .card-wrap{ flex-shrink:0; }
 #hcards::-webkit-scrollbar{height:3px;}
 #hcards::-webkit-scrollbar-track{background:var(--surface);}
 #hcards::-webkit-scrollbar-thumb{background:var(--pink);}
@@ -443,8 +448,8 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
 .rotate-hint .icon{font-size:48px;margin-bottom:14px;animation:rotate-anim 2s ease infinite;}
 @keyframes rotate-anim{0%,100%{transform:rotate(-90deg);}50%{transform:rotate(0deg);}}
 
-/* Все правила скролла обычные на десктопе — но трогать карты не нужно */
-.card-wrap{ touch-action: manipulation; }
+/* Палец должен листать руку, а не выбирать карту жестом */
+.card-wrap{ touch-action: pan-x; }
 
 /* На сенсорных устройствах подсветку фокуса карты не показываем */
 @media (hover: none){
@@ -460,8 +465,8 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
 
 /* ── Меню/Новая на мобильном — drawer вместо float-menu ── */
 @media (max-width: 900px){
-  #float-menu{display:none;}
-  .mobile-drawer{display:block;}
+  #float-menu{display:none !important;}
+  .mobile-drawer{display:block !important;}
 }
 
 /* ── Общие мобильные стили (≤900px) ── */
@@ -505,11 +510,11 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
 
   /* Рука игрока: горизонтальный скролл, без перекрытия (всё видно) */
   #harea       { height: 96px; flex: 0 0 96px; padding: 0; touch-action: pan-x; }
-  #hcards      { height: 96px; padding: 12px 6px 4px; gap: 4px; justify-content: flex-start;
+  #hcards      { height: 96px; padding: 12px 4px 4px; gap: 0; justify-content: flex-start;
                   overflow-x: auto; overflow-y: visible; -webkit-overflow-scrolling: touch;
                   touch-action: pan-x; }
-  #hcards .card-wrap{ touch-action: pan-x; }
-  .card-wrap canvas { transform: scale(.7); transform-origin: bottom center; }
+  #hcards .card-wrap{ touch-action: pan-x; width: 56px; }
+  .card-wrap canvas { transform: scale(.7); transform-origin: bottom left; }
 
   /* Тосты/облачка */
   .pas-bubble  { font-size: 14px; padding: 6px 10px; letter-spacing: 2px; }
@@ -570,78 +575,6 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
 .mp-av-plus{font-family:'Press Start 2P',monospace;font-size:22px;color:var(--pink2);}
 .mp-av-upload.has-img .mp-av-plus{display:none;}
 
-/* Аватар + колесо эмоций (мультиплеер) */
-.my-emote{
-  position:fixed;left:10px;bottom:10px;z-index:140;
-  width:54px;height:54px;
-}
-.my-emote.off{display:none;}
-.my-emote-btn{
-  width:54px;height:54px;border-radius:50%;
-  background:var(--surface2);color:var(--pink2);
-  border:3px solid var(--gold2);cursor:pointer;
-  display:flex;align-items:center;justify-content:center;
-  font-size:28px;padding:0;overflow:hidden;
-  box-shadow:0 0 12px rgba(255,204,68,.45);
-  transition:transform .12s;
-}
-.my-emote-btn:hover{transform:scale(1.05);}
-.my-emote-btn img{width:100%;height:100%;object-fit:cover;image-rendering:pixelated;display:block;border-radius:50%;}
-.my-emote-fallback{line-height:1;}
-
-.emote-wheel{
-  position:absolute;left:50%;top:50%;width:0;height:0;
-  pointer-events:none;
-}
-.emote-wheel.open{pointer-events:auto;}
-.emote-pick{
-  position:absolute;left:0;top:0;
-  width:42px;height:42px;margin:-21px 0 0 -21px;
-  border-radius:50%;border:2px solid var(--pink2);
-  background:var(--surface);font-size:22px;cursor:pointer;
-  display:flex;align-items:center;justify-content:center;padding:0;
-  opacity:0;transform:translate(0,0) scale(.4);
-  transition:transform .22s cubic-bezier(.22,1,.36,1), opacity .18s;
-  box-shadow:0 0 8px rgba(255,68,153,.4);
-}
-.emote-wheel.open .emote-pick{
-  opacity:1;
-  transform:translate(
-    calc(cos((var(--ang) - 90) * 1deg) * 78px),
-    calc(sin((var(--ang) - 90) * 1deg) * 78px)
-  ) scale(1);
-}
-.emote-pick:hover{background:var(--surface2);border-color:var(--gold2);}
-
-/* Всплывающая эмоция над аватаркой */
-.emote-bubble{
-  position:fixed;z-index:560;pointer-events:none;
-  font-size:36px;line-height:1;
-  filter:drop-shadow(0 2px 4px rgba(0,0,0,.6));
-  animation:emote-pop 2s ease forwards;
-}
-@keyframes emote-pop{
-  0%   { opacity:0; transform: translateY(0) scale(.4); }
-  15%  { opacity:1; transform: translateY(-12px) scale(1.25); }
-  25%  { transform: translateY(-18px) scale(1); }
-  80%  { opacity:1; transform: translateY(-22px) scale(1); }
-  100% { opacity:0; transform: translateY(-32px) scale(.85); }
-}
-
-/* На мобильном — компактнее, чтобы не перекрывало карты */
-@media (max-width: 900px){
-  .my-emote{width:42px;height:42px;left:6px;bottom:6px;}
-  .my-emote-btn{width:42px;height:42px;font-size:22px;border-width:2px;}
-  .emote-pick{width:36px;height:36px;margin:-18px 0 0 -18px;font-size:18px;}
-  .emote-wheel.open .emote-pick{
-    transform:translate(
-      calc(cos((var(--ang) - 90) * 1deg) * 60px),
-      calc(sin((var(--ang) - 90) * 1deg) * 60px)
-    ) scale(1);
-  }
-  .emote-bubble{font-size:28px;}
-}
-
 /* Таймер хода */
 #turn-timer{
   position:relative;height:5px;background:#1a0820;
@@ -654,26 +587,38 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
   transition:width .12s linear, background .2s;
 }
 
-/* Мобильный drawer (меню/новая) */
+/* Мобильный drawer (меню/новая) — спрятан за правым краем,
+   язычок-стрелочка торчит на 32px и заметно пульсирует */
 .mobile-drawer{
-  display:none;position:fixed;right:0;top:50%;
-  transform:translate(100%,-50%);z-index:120;
-  transition:transform .25s ease;
+  display:none;
+  position:fixed;
+  right:-130px;top:60%;
+  width:130px;
+  transform:translateY(-50%);
+  z-index:1000;
+  transition:right .25s ease;
 }
-.mobile-drawer.open{transform:translate(0,-50%);}
+.mobile-drawer.open{ right:0; }
 .mobile-drawer .drawer-tab{
-  position:absolute;left:-26px;top:50%;transform:translateY(-50%);
-  width:26px;height:60px;
-  background:var(--surface);color:var(--pink2);border:0;
-  border-left:2px solid var(--pink2);border-top:2px solid var(--pink2);
-  border-bottom:2px solid var(--pink2);
-  font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;
-  border-radius:8px 0 0 8px;
+  position:absolute;left:-34px;top:50%;
+  transform:translateY(-50%);
+  width:34px;height:72px;padding:0;
+  background:var(--pink2);color:#fff;
+  border:3px solid var(--gold2);border-right:0;
+  font-family:'Press Start 2P',monospace;font-size:16px;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  border-radius:10px 0 0 10px;
+  box-shadow:-2px 2px 0 rgba(0,0,0,.6),0 0 14px rgba(255,68,153,.6);
+  animation:drawer-pulse 1.6s ease-in-out infinite;
+}
+@keyframes drawer-pulse{
+  0%,100%{box-shadow:-2px 2px 0 rgba(0,0,0,.6),0 0 12px rgba(255,68,153,.5);}
+  50%   {box-shadow:-2px 2px 0 rgba(0,0,0,.6),0 0 24px rgba(255,204,68,.85);}
 }
 .mobile-drawer.open .drawer-tab{transform:translateY(-50%) rotate(180deg);}
 .mobile-drawer .drawer-content{
-  display:flex;flex-direction:column;gap:6px;padding:8px;
-  background:var(--surface);border:2px solid var(--pink2);
+  display:flex;flex-direction:column;gap:8px;padding:10px;
+  background:var(--surface);border:3px solid var(--pink2);border-right:0;
 }
-.mobile-drawer .sm-btn{font-size:9px;padding:8px 10px;}
+.mobile-drawer .sm-btn{font-size:10px;padding:10px 8px;}
 .mobile-drawer #rev-badge{position:static;display:none;font-size:8px;}
