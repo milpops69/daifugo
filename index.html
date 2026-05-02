@@ -167,15 +167,15 @@
   <div id="float-menu">
     <div id="rev-badge">⚡ РЕВ</div>
     <button class="sm-btn" onclick="goTitle()">МЕНЮ</button>
-    <button class="sm-btn" onclick="newGame()">НОВАЯ</button>
+    <button class="sm-btn btn-newgame" onclick="newGame()">НОВАЯ</button>
   </div>
 
   <!-- mobile drawer (hidden on desktop) -->
   <div class="mobile-drawer" id="mobile-drawer">
-    <button class="drawer-tab" onclick="toggleDrawer()" title="Меню">◀</button>
+    <button class="drawer-tab" onclick="toggleDrawer()" title="Меню">▾</button>
     <div class="drawer-content">
       <button class="sm-btn" onclick="goTitle()">МЕНЮ</button>
-      <button class="sm-btn" onclick="newGame()">НОВАЯ</button>
+      <button class="sm-btn btn-newgame" onclick="newGame()">НОВАЯ</button>
     </div>
   </div>
 
@@ -193,7 +193,7 @@
     <div class="rtitle">◈ ИТОГИ ◈</div>
     <div class="rsub" id="rsub"></div>
     <div class="rrows" id="rrows"></div>
-    <button class="px-btn" style="width:100%;padding:10px" onclick="newGame()">▶ ЕЩЁ РАЗ</button>
+    <button class="px-btn btn-newgame" style="width:100%;padding:10px" onclick="newGame()">▶ ЕЩЁ РАЗ</button>
     <button class="px-btn" style="width:100%;padding:10px;margin-top:8px" onclick="goTitle()">◀ МЕНЮ</button>
   </div>
 </div>

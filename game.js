@@ -241,6 +241,11 @@ function show(id)   {
     document.getElementById(s).classList.toggle('off', s !== id));
   const dr = document.getElementById('mobile-drawer');
   if (dr) dr.classList.remove('open');
+  // В мультиплеере прячем все кнопки «новая игра»
+  const inMP = (typeof MP !== 'undefined' && MP.active);
+  document.querySelectorAll('.btn-newgame').forEach(b => {
+    b.style.display = inMP ? 'none' : '';
+  });
 }
 
 function toggleDrawer(){
@@ -476,6 +481,10 @@ function startGameWithHands(hands) {
   GAME_GEN++;
   _pileSig = '';
   _lastTimerTurn = -1;
+  _glowSeat = null;
+  // Новая игра — генерируем новый seed для одиночных «ботов»
+  if (typeof _singleSeed !== 'undefined') _singleSeed = Math.random();
+  _lastAssignSig = '';
   G = {
     hands, currentCombo: null, pile: [],
     revolution: false, turn: start,
@@ -687,8 +696,18 @@ function setAvatar(el, av) {
 
 const BOT_COLORS = ['#4488ff','#44ff88','#ffaa44','#cc66ff','#ff6688','#66e0ff','#ffcc44','#aaff66'];
 
+let _lastAssignSig = '';
+let _singleSeed = Math.random();
 function assignBotPersonalities(N) {
   N = N || 4;
+  const inMP_ = (typeof MP !== 'undefined' && MP.active);
+  // Сигнатура — N + roster MP.peers; в одиночке — просто N+random токен (раз за игру)
+  const sig = inMP_
+    ? 'mp:' + N + ':' + (MP.peers || []).map(p => p.seat + ':' + (p.name||'') + ':' + (typeof p.avatar==='string' ? 'D' : p.avatar)).join('|')
+    : 'sp:' + N + ':' + _singleSeed;
+  if (sig === _lastAssignSig) return;  // уже расставлено — не пересоздаём
+  _lastAssignSig = sig;
+
   const namePool = shuffle([...JP_NAMES]);
   const avPool   = shuffle([...AVATARS]);
   const colPool  = shuffle([...BOT_COLORS]);
@@ -808,17 +827,25 @@ function renderHand() {
     wrap.dataset.idx = i;
     wrap.appendChild(makeCard(c, SC_HAND));
 
-    // Тап-vs-свайп: если палец сдвинулся больше 8px — это скролл, а не выбор.
-    let _downX = 0, _downY = 0, _moved = false;
+    // Тап / горизонт-свайп / вертикаль-drag — на мобильном решаем по направлению жеста.
+    let _downX = 0, _downY = 0, _moved = false, _touchDrag = false;
     wrap.addEventListener('pointerdown', e => {
-      _downX = e.clientX; _downY = e.clientY; _moved = false;
-      startDrag(e, i, wrap, c);
+      _downX = e.clientX; _downY = e.clientY; _moved = false; _touchDrag = false;
+      // Мышь — сразу drag. Тач — ждём direction, чтоб не блокировать скролл руки.
+      if (e.pointerType !== 'touch') startDrag(e, i, wrap, c);
     });
     wrap.addEventListener('pointermove', e => {
-      if (Math.abs(e.clientX - _downX) > 8 || Math.abs(e.clientY - _downY) > 8) _moved = true;
+      const dx = e.clientX - _downX, dy = e.clientY - _downY;
+      if (Math.abs(dx) > 6 || Math.abs(dy) > 6) _moved = true;
+      // На тач-устройстве: вертикаль-преобладание + движение вверх = тянем карту на стол
+      if (e.pointerType === 'touch' && !_touchDrag && _moved) {
+        if (dy < -10 && Math.abs(dy) >= Math.abs(dx)) {
+          _touchDrag = true;
+          startDrag(e, i, wrap, c);
+        }
+      }
     });
     wrap.addEventListener('click', () => {
-      // Если только что свайпали руку — игнорируем клик чтоб не выделить случайно
       if (Date.now() - _hcardsScrollTime < 250) { _moved = false; return; }
       if (_moved || isDragging) { _moved = false; return; }
       focusIdx = i; toggleCard(i);
@@ -874,6 +901,29 @@ function renderActive() {
   const my = G.turn===mp2 && !G.finished.includes(mp2) && !G.gameOver && !G.busy;
   document.getElementById('bps').disabled = !my;
   document.getElementById('bplay').disabled = !my;
+  // Подсветка аватара активного игрока (только для оппонентов и только в МП)
+  applyTurnGlow();
+}
+
+let _glowSeat = null;
+function applyTurnGlow(){
+  const inMP = (typeof MP !== 'undefined' && MP.active);
+  const off = !inMP || G.gameOver || G.busy
+            || G.turn == null || G.turn === myPlayer()
+            || (G.finished && G.finished.includes(G.turn));
+  if (off) {
+    document.querySelectorAll('.turn-glow').forEach(el => el.classList.remove('turn-glow'));
+    _glowSeat = null; return;
+  }
+  if (G.turn === _glowSeat) return; // ход не сменился — анимацию не перезапускаем
+  document.querySelectorAll('.turn-glow').forEach(el => el.classList.remove('turn-glow'));
+  const disp = displayOf(G.turn);
+  if (disp <= 0) { _glowSeat = null; return; }
+  const av = document.getElementById('av-' + disp);
+  if (!av) return;
+  void av.offsetWidth; // reflow → перезапуск CSS-анимации
+  av.classList.add('turn-glow');
+  _glowSeat = G.turn;
 }
 
 function renderStatus() {}
@@ -883,12 +933,10 @@ let isDragging = false;
 let dragData   = null;
 
 function startDrag(e, idx, wrap, card) {
-  // На тач-устройствах не цепляемся за drag — даём пальцу спокойно
-  // скроллить руку и тапать по картам.
-  if (e.pointerType === 'touch') return;
   const mp = myPlayer();
   if (G.turn!==mp||G.finished.includes(mp)||G.gameOver||G.busy) return;
-  e.preventDefault(); isDragging = false;
+  if (e.cancelable) e.preventDefault();
+  isDragging = false;
   const sel       = G.hands[mp].filter(c => c.sel);
   const dragCards = card.sel && sel.length > 1 ? sel : [card];
   dragData = { cards: dragCards, startX: e.clientX, startY: e.clientY };
@@ -900,6 +948,9 @@ function startDrag(e, idx, wrap, card) {
   ghost.style.left = (e.clientX - PW/2) + 'px';
   ghost.style.top  = (e.clientY - PH/2) + 'px';
 
+  // Захватываем указатель — гарантированно доберём pointermove/up даже если палец ушёл с карты
+  try { wrap.setPointerCapture(e.pointerId); } catch(_) {}
+
   const dz = document.getElementById('dropzone');
   const onMove = ev => {
     if (Math.abs(ev.clientX-dragData.startX)>5||Math.abs(ev.clientY-dragData.startY)>5) isDragging=true;
@@ -908,11 +959,13 @@ function startDrag(e, idx, wrap, card) {
     const r = dz.getBoundingClientRect();
     dz.classList.toggle('dragover',
       ev.clientX>=r.left&&ev.clientX<=r.right&&ev.clientY>=r.top&&ev.clientY<=r.bottom);
+    if (ev.cancelable) ev.preventDefault();
   };
   const onUp = ev => {
     document.removeEventListener('pointermove', onMove);
     document.removeEventListener('pointerup',   onUp);
     document.removeEventListener('pointercancel', onUp);
+    try { wrap.releasePointerCapture(ev.pointerId); } catch(_) {}
     ghost.style.display = 'none';
     dz.classList.remove('dragover');
     const r = dz.getBoundingClientRect();

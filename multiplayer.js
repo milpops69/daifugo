@@ -165,9 +165,23 @@ function mpSetStatus(txt, col) {
 
 function goOnline() { show('online'); mpSetStatus(''); }
 
+function mpResetLobbyUi(){
+  const w  = document.getElementById('mp-waiting');
+  if (w) w.style.display = 'none';
+  const r  = document.getElementById('mp-roster');
+  if (r) r.innerHTML = '';
+  const cd = document.getElementById('mp-code-display');
+  if (cd) cd.textContent = '';
+  // полный сброс предыдущего состояния
+  if (MP.ws) { try { MP.ws.close(); } catch(_){} MP.ws = null; }
+  MP.active = false; MP.seat = null; MP.room = null;
+  MP.peers = []; MP.numPlayers = 0;
+}
+
 // ── СОЗДАТЬ / ВОЙТИ ────────────────────────────────────────
 function mpCreateRoom() {
   if (!mpReadProfile()) return;
+  mpResetLobbyUi();
   mpSetStatus('Подключение…');
   mpConnect(() => mpSend({ type: 'create',
                             max_players: MP.selectedCount,
@@ -179,6 +193,7 @@ function mpJoinRoom() {
   const code = inp ? inp.value.trim().toUpperCase() : '';
   if (code.length < 2) { mpSetStatus('Введите код', '#ff5555'); return; }
   if (!mpReadProfile()) return;
+  mpResetLobbyUi();
   mpSetStatus('Подключение…');
   mpConnect(() => mpSend({ type: 'join', code, profile: MP.profile }));
 }
@@ -327,6 +342,10 @@ function mpGuestHandle(fromSeat, data) {
   G.roundNum     = data.roundNum;
   G.numPlayers   = data.numPlayers;
   G.busy         = false;
+  // Гарантированно пере-применяем layout и имена/аватары игроков
+  // (страховка от случая, когда первый assign проскочил без MP.peers).
+  if (typeof applyLayoutForN === 'function') applyLayoutForN(G.numPlayers);
+  if (typeof assignBotPersonalities === 'function') assignBotPersonalities(G.numPlayers);
   render();
   if (G.gameOver) setTimeout(showResults, 1400);
 }

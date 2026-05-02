@@ -314,11 +314,9 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
   flex:1 1 auto;min-width:0;width:100%;
   padding:18px 0 4px;
   touch-action:pan-x;
-  scrollbar-width:thin;scrollbar-color:var(--pink) var(--surface);}
+  scrollbar-width:none;}
+#hcards::-webkit-scrollbar{ display:none; height:0; width:0; }
 #hcards .card-wrap{ flex-shrink:0; }
-#hcards::-webkit-scrollbar{height:3px;}
-#hcards::-webkit-scrollbar-track{background:var(--surface);}
-#hcards::-webkit-scrollbar-thumb{background:var(--pink);}
 
 /* CARD WRAPS */
 .card-wrap{position:relative;cursor:grab;flex-shrink:0;transition:transform .12s, filter .12s, opacity .12s;}
@@ -575,6 +573,17 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
 .mp-av-plus{font-family:'Press Start 2P',monospace;font-size:22px;color:var(--pink2);}
 .mp-av-upload.has-img .mp-av-plus{display:none;}
 
+/* Подсветка аватара активного игрока — синхронно с таймером хода 20 сек */
+.bot-avatar.turn-glow, .chip-avatar.turn-glow{
+  animation: turn-glow 20s linear forwards;
+}
+@keyframes turn-glow{
+  0%   { box-shadow: 0 0 18px 3px #44ff88, inset 0 0 6px rgba(0,0,0,.4); border-color:#44ff88; }
+  50%  { box-shadow: 0 0 14px 2px #ffcc44, inset 0 0 6px rgba(0,0,0,.4); border-color:#ffcc44; }
+  85%  { box-shadow: 0 0 12px 2px #ff3366, inset 0 0 6px rgba(0,0,0,.4); border-color:#ff3366; }
+  100% { box-shadow: 0 0 0 0 transparent, inset 0 0 6px rgba(0,0,0,.4); border-color: var(--bot-accent, var(--border)); }
+}
+
 /* Таймер хода */
 #turn-timer{
   position:relative;height:5px;background:#1a0820;
@@ -587,38 +596,34 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
   transition:width .12s linear, background .2s;
 }
 
-/* Мобильный drawer (меню/новая) — спрятан за правым краем,
-   язычок-стрелочка торчит на 32px и заметно пульсирует */
+/* Мобильный drawer (меню/новая) — компактная панель сверху, чуть правее центра.
+   Скрыта над экраном, видна только маленькая стрелка-язычок. */
 .mobile-drawer{
   display:none;
   position:fixed;
-  right:-130px;top:60%;
-  width:130px;
-  transform:translateY(-50%);
+  top:-44px;left:58%;
+  transform:translateX(-50%);
   z-index:1000;
-  transition:right .25s ease;
+  transition:top .22s ease;
 }
-.mobile-drawer.open{ right:0; }
+.mobile-drawer.open{ top: 0; }
 .mobile-drawer .drawer-tab{
-  position:absolute;left:-34px;top:50%;
-  transform:translateY(-50%);
-  width:34px;height:72px;padding:0;
-  background:var(--pink2);color:#fff;
-  border:3px solid var(--gold2);border-right:0;
-  font-family:'Press Start 2P',monospace;font-size:16px;
+  position:absolute;left:50%;
+  bottom:-18px;
+  transform:translateX(-50%);
+  width:30px;height:18px;padding:0;
+  background:var(--surface);color:var(--pink2);
+  border:2px solid var(--pink2);border-top:0;
+  font-size:10px;line-height:1;
   cursor:pointer;display:flex;align-items:center;justify-content:center;
-  border-radius:10px 0 0 10px;
-  box-shadow:-2px 2px 0 rgba(0,0,0,.6),0 0 14px rgba(255,68,153,.6);
-  animation:drawer-pulse 1.6s ease-in-out infinite;
+  border-radius:0 0 6px 6px;
+  box-shadow:0 2px 6px rgba(0,0,0,.5);
 }
-@keyframes drawer-pulse{
-  0%,100%{box-shadow:-2px 2px 0 rgba(0,0,0,.6),0 0 12px rgba(255,68,153,.5);}
-  50%   {box-shadow:-2px 2px 0 rgba(0,0,0,.6),0 0 24px rgba(255,204,68,.85);}
-}
-.mobile-drawer.open .drawer-tab{transform:translateY(-50%) rotate(180deg);}
+.mobile-drawer.open .drawer-tab{ transform:translateX(-50%) rotate(180deg); }
 .mobile-drawer .drawer-content{
-  display:flex;flex-direction:column;gap:8px;padding:10px;
-  background:var(--surface);border:3px solid var(--pink2);border-right:0;
+  display:flex;flex-direction:row;gap:4px;padding:4px 6px;
+  background:var(--surface);border:2px solid var(--pink2);border-top:0;
+  border-radius:0 0 6px 6px;
 }
-.mobile-drawer .sm-btn{font-size:10px;padding:10px 8px;}
-.mobile-drawer #rev-badge{position:static;display:none;font-size:8px;}
+.mobile-drawer .sm-btn{font-size:8px;padding:5px 8px;}
+.mobile-drawer #rev-badge{display:none;}
