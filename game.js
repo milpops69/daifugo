@@ -793,12 +793,14 @@ function renderCounts() {
 }
 
 function renderBotHands() {
+  // У оппонентов рисуем только "рубашки" по количеству карт.
+  // Значения карт никогда не показываем, даже если они есть в G.hands.
   [1,2,3].forEach(disp => {
     const el = document.getElementById('bot-hand-' + disp);
     if (!el) return;
     el.innerHTML = '';
     const seat = seatOf(disp);
-    if (seat < 0 || !G.hands[seat]) return;
+    if (seat < 0 || !G.hands || !G.hands[seat]) return;
     const n = G.hands[seat].length;
     if (!n) return;
     const done = G.finished.includes(seat);

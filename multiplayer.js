@@ -294,46 +294,41 @@ function mpStartGame() {
   }
 }
 
-// ── ХОСТ → ВСЕМ: рассылка состояния ────────────────────────
+// ── ХОСТ → ВСЕМ: один broadcast с одинаковым состоянием ─────
+// Раньше каждый получал свой "масочный" пакет — это давало рассинхрон.
+// Теперь шлём всем одинаковое состояние, чужие руки в UI всё равно
+// рисуются как "рубашки" (renderBotHands не показывает значения).
 function mpSendState() {
   if (!MP.active || MP.seat !== 0) return;
-  // Каждому гостю шлём своё состояние с раскрытой только его рукой
-  for (const p of MP.peers) {
-    if (p.seat === 0) continue;
-    const maskedHands = G.hands.map((h, i) =>
-      i === p.seat
-        ? h.map(c => ({ r: c.r, s: c.s, id: c.id, sel: false }))
-        : h.map(c => ({ r: '?',  s: '?',  id: c.id, sel: false }))
-    );
-    mpSend({ type: 'relay', target: p.seat, data: {
-      k: 'state',
-      hands:        maskedHands,
-      currentCombo: G.currentCombo,
-      revolution:   G.revolution,
-      turn:         G.turn,
-      passCount:    G.passCount,
-      finished:     G.finished,
-      rankings:     G.rankings,
-      gameOver:     G.gameOver,
-      roundNum:     G.roundNum || 1,
-      numPlayers:   G.numPlayers,
-    }});
-  }
+  const state = {
+    k: 'state',
+    hands: G.hands.map(h => h.map(c => ({ r: c.r, s: c.s, id: c.id }))),
+    currentCombo: G.currentCombo,
+    revolution:   G.revolution,
+    turn:         G.turn,
+    passCount:    G.passCount,
+    finished:     G.finished,
+    rankings:     G.rankings,
+    gameOver:     G.gameOver,
+    roundNum:     G.roundNum || 1,
+    numPlayers:   G.numPlayers,
+  };
+  mpSend({ type: 'relay', data: state });   // без target = broadcast всем кроме хоста
 }
 
 // ── ГОСТЬ ← ХОСТ: применить состояние ──────────────────────
 function mpGuestHandle(fromSeat, data) {
-  if (data.k !== 'state') {
-    if (data.k === 'err') { sndError(); toast(data.msg || 'НЕЛЬЗЯ'); }
-    return;
-  }
+  if (data.k === 'err') { sndError(); toast(data.msg || 'НЕЛЬЗЯ'); G.busy = false; render(); return; }
+  if (data.k !== 'state') return;
+
   const my = MP.seat;
+  // Сохраняем локальные выделения только для своей руки
   const oldHand = (G.hands && G.hands[my]) || [];
   const selMap  = {};
   oldHand.forEach(c => { if (c.sel) selMap[c.id] = true; });
 
   G.hands = data.hands.map((h, i) =>
-    h.map(c => ({ ...c, sel: (i === my && selMap[c.id]) || false }))
+    h.map(c => ({ r: c.r, s: c.s, id: c.id, sel: (i === my && !!selMap[c.id]) }))
   );
   G.currentCombo = data.currentCombo;
   G.revolution   = data.revolution;
@@ -345,8 +340,7 @@ function mpGuestHandle(fromSeat, data) {
   G.roundNum     = data.roundNum;
   G.numPlayers   = data.numPlayers;
   G.busy         = false;
-  // Гарантированно пере-применяем layout и имена/аватары игроков
-  // (страховка от случая, когда первый assign проскочил без MP.peers).
+
   if (typeof applyLayoutForN === 'function') applyLayoutForN(G.numPlayers);
   if (typeof assignBotPersonalities === 'function') assignBotPersonalities(G.numPlayers);
   render();
@@ -390,7 +384,11 @@ function mpGuestPass() {
 // ── ХОСТ ← ГОСТЬ: обработать действие ──────────────────────
 function mpHostHandle(fromSeat, data) {
   if (G.gameOver) return;
-  if (G.turn !== fromSeat || G.finished.includes(fromSeat)) return;
+  // На любые проблемы — шлём свежее состояние, чтобы гость пересинхронился.
+  if (G.turn !== fromSeat || G.finished.includes(fromSeat)) {
+    mpSendState();
+    return;
+  }
   if (data.k === 'pass') {
     sndPass();
     doPass(fromSeat);
@@ -398,11 +396,16 @@ function mpHostHandle(fromSeat, data) {
     const cards = (data.cardIds || [])
       .map(id => G.hands[fromSeat].find(c => c.id === id))
       .filter(Boolean);
-    if (!cards.length) return;
+    if (!cards.length) {
+      mpSend({ type:'relay', target: fromSeat, data:{ k:'err', msg:'НЕТ ТАКИХ КАРТ' }});
+      mpSendState();
+      return;
+    }
     const res = validate(cards);
     if (!res.ok) {
       mpSend({ type:'relay', target: fromSeat,
                data:{ k:'err', msg:res.msg }});
+      mpSendState();
       return;
     }
     sndCard();
