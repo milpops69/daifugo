@@ -154,8 +154,11 @@ function mpConnect(onOpen) {
 }
 
 function mpSend(obj) {
-  if (MP.ws && MP.ws.readyState === WebSocket.OPEN)
-    MP.ws.send(JSON.stringify(obj));
+  if (MP.ws && MP.ws.readyState === WebSocket.OPEN) {
+    try { MP.ws.send(JSON.stringify(obj)); return true; }
+    catch (_) { return false; }
+  }
+  return false;
 }
 
 function mpSetStatus(txt, col) {
@@ -352,12 +355,36 @@ function mpGuestHandle(fromSeat, data) {
 
 // ── ГОСТЬ → ХОСТУ: действие ────────────────────────────────
 function mpGuestPlay(cardIds) {
-  mpSend({ type: 'relay', target: 0, data: { k: 'play', cardIds } });
+  if (!mpSend({ type: 'relay', target: 0, data: { k: 'play', cardIds } })) {
+    toast('НЕТ СОЕДИНЕНИЯ С ХОСТОМ');
+    return;
+  }
   G.hands[MP.seat].forEach(c => c.sel = false);
+  // Блокируем интерфейс и таймер до ответа хоста — иначе авто-пас
+  // сработает прямо во время сетевого роундтрипа.
+  G.busy = true;
+  if (typeof clearTurnTimer === 'function') clearTurnTimer();
   render();
+  // Защита от зависания: если хост не ответил за 8 сек — снимаем блок
+  setTimeout(() => {
+    if (G && G.busy && MP.active) {
+      G.busy = false;
+      toast('ХОСТ НЕ ОТВЕТИЛ — ПОПРОБУЙТЕ ЕЩЁ');
+      render();
+    }
+  }, 8000);
 }
 function mpGuestPass() {
-  mpSend({ type: 'relay', target: 0, data: { k: 'pass' } });
+  if (!mpSend({ type: 'relay', target: 0, data: { k: 'pass' } })) {
+    toast('НЕТ СОЕДИНЕНИЯ С ХОСТОМ');
+    return;
+  }
+  G.busy = true;
+  if (typeof clearTurnTimer === 'function') clearTurnTimer();
+  render();
+  setTimeout(() => {
+    if (G && G.busy && MP.active) { G.busy = false; render(); }
+  }, 8000);
 }
 
 // ── ХОСТ ← ГОСТЬ: обработать действие ──────────────────────

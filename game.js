@@ -698,29 +698,30 @@ const BOT_COLORS = ['#4488ff','#44ff88','#ffaa44','#cc66ff','#ff6688','#66e0ff',
 
 let _lastAssignSig = '';
 let _singleSeed = Math.random();
+let _shuffledNames = null, _shuffledAvs = null, _shuffledCols = null;
 function assignBotPersonalities(N) {
   N = N || 4;
-  const inMP_ = (typeof MP !== 'undefined' && MP.active);
-  // Сигнатура — N + roster MP.peers; в одиночке — просто N+random токен (раз за игру)
-  const sig = inMP_
-    ? 'mp:' + N + ':' + (MP.peers || []).map(p => p.seat + ':' + (p.name||'') + ':' + (typeof p.avatar==='string' ? 'D' : p.avatar)).join('|')
-    : 'sp:' + N + ':' + _singleSeed;
-  if (sig === _lastAssignSig) return;  // уже расставлено — не пересоздаём
-  _lastAssignSig = sig;
+  const inMP = (typeof MP !== 'undefined' && MP.active);
+  const peerBySeat = {};
+  if (inMP && MP.peers) MP.peers.forEach(p => peerBySeat[p.seat] = p);
 
-  const namePool = shuffle([...JP_NAMES]);
-  const avPool   = shuffle([...AVATARS]);
-  const colPool  = shuffle([...BOT_COLORS]);
+  // Кэшируем только случайные перестановки (имена/аватары/цвета ботов).
+  // Сами назначения в DOM делаем КАЖДЫЙ раз — это страховка от рассинхрона.
+  const sig = inMP
+    ? 'mp:' + N + ':' + (MP.peers || []).map(p => p.seat).sort().join(',')
+    : 'sp:' + N + ':' + _singleSeed;
+  if (sig !== _lastAssignSig || !_shuffledNames) {
+    _lastAssignSig = sig;
+    _shuffledNames = shuffle([...JP_NAMES]);
+    _shuffledAvs   = shuffle([...AVATARS]);
+    _shuffledCols  = shuffle([...BOT_COLORS]);
+  }
 
   const slots = [
     { disp: 1, avEl: 'av-1', nmEl: 'cn-1' },
     { disp: 2, avEl: 'av-2', nmEl: 'cn-2' },
     { disp: 3, avEl: 'av-3', nmEl: 'cn-3' },
   ];
-  const inMP = (typeof MP !== 'undefined' && MP.active);
-  // Карта seat -> профиль игрока в MP
-  const peerBySeat = {};
-  if (inMP && MP.peers) MP.peers.forEach(p => peerBySeat[p.seat] = p);
 
   // подгоняем размер NAMES под N
   while (NAMES.length < N) NAMES.push('Игрок ' + (NAMES.length + 1));
@@ -728,21 +729,21 @@ function assignBotPersonalities(N) {
   let pi = 0;
   slots.forEach(s => {
     const seat = seatOf(s.disp);
-    if (seat < 0) return; // слот не используется при текущем N
+    if (seat < 0) return;
     let name, avatar, accent;
     if (inMP && peerBySeat[seat]) {
       const peer = peerBySeat[seat];
-      name   = peer.name || 'Игрок';
+      name = peer.name || ('Игрок ' + (seat + 1));
       if (typeof peer.avatar === 'string' && peer.avatar.startsWith('data:')) {
         avatar = { src: peer.avatar, emoji: '🖼' };
       } else {
         avatar = AVATARS[Math.max(0, Math.min(AVATARS.length-1, peer.avatar|0))];
       }
-      accent = colPool[pi % colPool.length];
+      accent = _shuffledCols[pi % _shuffledCols.length];
     } else {
-      name   = namePool[pi % namePool.length];
-      avatar = avPool[pi % avPool.length];
-      accent = colPool[pi % colPool.length];
+      name   = _shuffledNames[pi % _shuffledNames.length];
+      avatar = _shuffledAvs[pi % _shuffledAvs.length];
+      accent = _shuffledCols[pi % _shuffledCols.length];
     }
     pi++;
     NAMES[seat] = name;
@@ -754,6 +755,13 @@ function assignBotPersonalities(N) {
   });
   // моё имя в MP
   if (inMP) NAMES[MP.seat] = (MP.profile && MP.profile.name) || 'Я';
+  // Дополнительная гарантия: для ВСЕХ peers пишем имя в NAMES,
+  // даже если их display-слот не отрисовался (защита от любых race-conditions).
+  if (inMP && MP.peers) {
+    MP.peers.forEach(p => {
+      NAMES[p.seat] = p.name || ('Игрок ' + (p.seat + 1));
+    });
+  }
 }
 
 // ── RENDER ────────────────────────────────────────────────
@@ -908,7 +916,7 @@ function renderActive() {
 let _glowSeat = null;
 function applyTurnGlow(){
   const inMP = (typeof MP !== 'undefined' && MP.active);
-  const off = !inMP || G.gameOver || G.busy
+  const off = !inMP || !G || G.gameOver
             || G.turn == null || G.turn === myPlayer()
             || (G.finished && G.finished.includes(G.turn));
   if (off) {
@@ -984,7 +992,10 @@ function tryPlayerPlay(cards) {
   const res = validate(cards);
   if (!res.ok) { sndError(); toast(res.msg); return; }
   sndCard();
-  flyCards(cards, getPlayerCardPositions(cards), () => commitPlay(0, cards, res));
+  // Блокируем повторные действия и автопас на время анимации
+  G.busy = true;
+  if (typeof clearTurnTimer === 'function') clearTurnTimer();
+  flyCards(cards, getPlayerCardPositions(cards), () => commitPlay(myPlayer(), cards, res));
 }
 
 function playerPlaySelected() {
@@ -1113,6 +1124,7 @@ function validate(cards) {
 // ── COMMIT PLAY ───────────────────────────────────────────
 function commitPlay(who, cards, res) {
   clearAllPas();
+  G.busy = false;             // снимаем блок после анимации
   const hand = G.hands[who];
   for (const c of cards) {
     const i = hand.findIndex(h => h.id===c.id);
