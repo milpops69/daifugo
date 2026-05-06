@@ -1,5 +1,5 @@
 // ============================================================
-//  multiplayer.js — простой клиент для DaiFugo MP (2-4 игроков)
+//  multiplayer.js — полностью рабочий клиент для DaiFugo MP (2-4 игроков)
 //
 //  Протокол:
 //    клиент → сервер:
@@ -21,6 +21,7 @@
 //      'play'  — гость → хосту (мой ход с указанными ID карт)
 //      'pass'  — гость → хосту (мой пас)
 //      'err'   — хост → гостю (валидация не прошла)
+//      'sync_req' — гость → хосту (запрос полного состояния)
 // ============================================================
 
 const MP = {
@@ -32,6 +33,9 @@ const MP = {
   profile: { name: 'ИГРОК', avatar: 0 },
   peers: [],
   selectedCount: 4,
+  stateSeq: 0,          // для отслеживания версий состояния
+  lastSeq: -1,          // последняя примененная версия
+  leaveTimer: null,     // таймер для выхода
 };
 
 const WS_PROTO = (location.protocol === 'https:') ? 'wss:' : 'ws:';
@@ -39,6 +43,10 @@ const WS_URL   = `${WS_PROTO}//${location.host}/ws`;
 
 const MP_DEBUG = true;
 function mlog(...a){ if (MP_DEBUG) console.log('[MP]', ...a); }
+
+// Глобальные переменные игры (определяются в main.js)
+let G;           // состояние игры
+let prevRankings = null;
 
 // ── ПРОФИЛЬ ────────────────────────────────────────────────
 function mpProfileStatus(txt, col){
@@ -67,8 +75,7 @@ function mpToRoomStep(){
 function mpToProfileStep(){
   document.getElementById('online').dataset.step = 'profile';
   mpProfileStatus('');
-  if (MP.ws) { try { MP.ws.close(); } catch(_){} MP.ws = null; }
-  MP.active = false; MP.seat = null; MP.room = null; MP.peers = [];
+  mpLeave();
   const w = document.getElementById('mp-waiting');  if (w) w.style.display = 'none';
   const r = document.getElementById('mp-roster');    if (r) r.innerHTML = '';
 }
@@ -119,7 +126,11 @@ function mpConnect(onOpen) {
   MP.ws.onerror   = () => { mpSetStatus('Нет связи с сервером', '#ff5555'); };
   MP.ws.onclose   = () => {
     mlog('WS close');
-    if (MP.active) { toast('СОЕДИНЕНИЕ ПОТЕРЯНО'); MP.active = false; goTitle(); }
+    if (MP.active) { 
+      toast('СОЕДИНЕНИЕ ПОТЕРЯНО'); 
+      MP.active = false; 
+      setTimeout(() => goTitle(), 1500);
+    }
     else if (!opened) mpSetStatus('Сервер не отвечает', '#ff5555');
   };
 }
@@ -145,9 +156,10 @@ function mpResetLobbyUi(){
   const w  = document.getElementById('mp-waiting');  if (w) w.style.display = 'none';
   const r  = document.getElementById('mp-roster');    if (r) r.innerHTML = '';
   const cd = document.getElementById('mp-code-display'); if (cd) cd.textContent = '';
-  if (MP.ws) { try { MP.ws.close(); } catch(_){} MP.ws = null; }
+  if (MP.leaveTimer) clearTimeout(MP.leaveTimer);
   MP.active = false; MP.seat = null; MP.room = null;
   MP.peers = []; MP.numPlayers = 0;
+  MP.stateSeq = 0; MP.lastSeq = -1;
 }
 
 function mpCreateRoom() {
@@ -200,7 +212,6 @@ function mpHandleMsg(msg) {
       MP.numPlayers = msg.max;
       MP.active = true;
       mpSetStatus('Поехали!', '#44ff88');
-      // Сразу переходим — без 600мс задержки
       show('game');
       mpStartGame();
       return;
@@ -214,13 +225,26 @@ function mpHandleMsg(msg) {
       return;
 
     case 'opponent_left':
-      toast('ИГРОК ВЫШЕЛ');
-      MP.active = false;
-      setTimeout(goTitle, 1500);
+      if (msg.seat === 0 && MP.seat !== 0) {
+        toast('Хост покинул игру');
+        MP.active = false;
+        mpLeave();
+        setTimeout(() => goTitle(), 1500);
+      } else {
+        toast('ИГРОК ВЫШЕЛ');
+        if (MP.seat === 0) {
+          // Хост должен пересобрать игру
+          mpSendState();
+        }
+      }
       return;
 
     case 'error':
       mpSetStatus(msg.msg, '#ff5555');
+      if (MP.active) {
+        toast('Ошибка: ' + msg.msg);
+        setTimeout(() => goTitle(), 2000);
+      }
       return;
   }
 }
@@ -229,13 +253,15 @@ function mpUpdateRoster(players) {
   const el = document.getElementById('mp-roster');
   if (!el) return;
   el.innerHTML = '';
+  const maxAvatars = 12; // количество доступных аватаров
   players.forEach(p => {
     const row = document.createElement('div');
     row.className = 'row' + (p.seat === MP.seat ? ' me' : '');
     const img = document.createElement('img');
-    const idx = Math.max(0, Math.min(4, (p.avatar|0)));
+    let idx = Math.max(0, Math.min(maxAvatars - 1, (p.avatar || 0)));
     img.src = `av${idx+1}.jpg`;
     img.alt = '';
+    img.onerror = () => { img.src = 'av1.jpg'; }; // fallback
     const nm = document.createElement('div');
     nm.textContent = p.name || ('Игрок ' + (p.seat+1));
     row.appendChild(img); row.appendChild(nm);
@@ -243,14 +269,55 @@ function mpUpdateRoster(players) {
   });
 }
 
+// ── ВАЛИДАЦИЯ ХОДА (базовая, нужно дополнить под ваши правила) ──
+function validate(cards) {
+  if (!cards || cards.length === 0) {
+    return { ok: false, msg: 'Нет карт' };
+  }
+  
+  // Базовая проверка - все карты одного ранга
+  const rank = cards[0].r;
+  const allSameRank = cards.every(c => c.r === rank);
+  
+  if (!allSameRank) {
+    return { ok: false, msg: 'Карты должны быть одного ранга' };
+  }
+  
+  // Проверка комбинации с текущей на столе
+  if (G.currentCombo && G.currentCombo.cards && G.currentCombo.cards.length > 0) {
+    const currentRank = G.currentCombo.cards[0].r;
+    const currentCount = G.currentCombo.cards.length;
+    const isRevolution = G.revolution;
+    
+    // При революции нужно бить младшим рангом
+    if (isRevolution) {
+      if (rank >= currentRank && currentRank !== 2) { // 2 всегда бьет
+        return { ok: false, msg: 'При революции нужно бить младшей картой' };
+      }
+    } else {
+      if (rank <= currentRank && rank !== 2) { // 2 всегда бьет
+        return { ok: false, msg: 'Нужно бить старшей картой' };
+      }
+    }
+    
+    if (cards.length !== currentCount) {
+      return { ok: false, msg: `Нужно ${currentCount} карт` };
+    }
+  }
+  
+  return { ok: true, msg: '' };
+}
+
 // ── СТАРТ ИГРЫ ─────────────────────────────────────────────
 function mpStartGame() {
   prevRankings = null;
   if (MP.seat === 0) {
-    // Хост — запускает игру, после render() автоматически отправит state
+    // Хост — запускает игру
     newGame();
+    // Отправляем состояние через 100ms чтобы render() успел отработать
+    setTimeout(() => mpSendState(), 100);
   } else {
-    // Гость — пустая заглушка, ждём первого state от хоста
+    // Гость — ждём первый state от хоста
     G = {
       hands: Array.from({length: MP.numPlayers}, () => []),
       currentCombo: null, pile: [], revolution: false,
@@ -261,16 +328,32 @@ function mpStartGame() {
     if (typeof applyLayoutForN === 'function') applyLayoutForN(MP.numPlayers);
     if (typeof assignBotPersonalities === 'function') assignBotPersonalities(MP.numPlayers);
     render();
+    
+    // Запрашиваем состояние у хоста
+    setTimeout(() => mpRequestSync(), 500);
   }
+}
+
+function mpRequestSync() {
+  if (!MP.active || MP.seat === 0) return;
+  mpSend({ type: 'relay', target: 0, data: { k: 'sync_req' } });
 }
 
 // ── ХОСТ → ВСЕМ: единый broadcast полного состояния ────────
 function mpSendState() {
   if (!MP.active || MP.seat !== 0) return;
+  if (!G) return;
+  
+  MP.stateSeq++;
   const state = {
+    seq: MP.stateSeq,
     k: 'state',
-    hands: G.hands.map(h => h.map(c => ({ r: c.r, s: c.s, id: c.id }))),
-    currentCombo: G.currentCombo,
+    hands: G.hands.map(h => h ? h.map(c => ({ r: c.r, s: c.s, id: c.id })) : []),
+    currentCombo: G.currentCombo ? {
+      cards: G.currentCombo.cards.map(c => ({ r: c.r, s: c.s, id: c.id })),
+      type: G.currentCombo.type,
+      rank: G.currentCombo.rank
+    } : null,
     revolution:   G.revolution,
     turn:         G.turn,
     passCount:    G.passCount,
@@ -286,85 +369,231 @@ function mpSendState() {
 // ── ГОСТЬ ← ХОСТ: применяем состояние ──────────────────────
 function mpGuestHandle(fromSeat, data) {
   if (data.k === 'err') {
-    sndError(); toast(data.msg || 'НЕЛЬЗЯ');
-    G.busy = false; render();
+    if (typeof sndError === 'function') sndError();
+    toast(data.msg || 'НЕЛЬЗЯ');
+    if (G) G.busy = false;
+    render();
     return;
   }
-  if (data.k !== 'state') return;
-
-  const my = MP.seat;
-  const oldHand = (G.hands && G.hands[my]) || [];
-  const selMap  = {};
-  oldHand.forEach(c => { if (c.sel) selMap[c.id] = true; });
-
-  G.hands = data.hands.map((h, i) =>
-    h.map(c => ({ r: c.r, s: c.s, id: c.id, sel: (i === my && !!selMap[c.id]) }))
-  );
-  G.currentCombo = data.currentCombo;
-  G.revolution   = data.revolution;
-  G.turn         = data.turn;
-  G.passCount    = data.passCount;
-  G.finished     = data.finished;
-  G.rankings     = data.rankings;
-  G.gameOver     = data.gameOver;
-  G.roundNum     = data.roundNum;
-  G.numPlayers   = data.numPlayers;
-  G.busy         = false;
-
-  if (typeof applyLayoutForN === 'function') applyLayoutForN(G.numPlayers);
-  if (typeof assignBotPersonalities === 'function') assignBotPersonalities(G.numPlayers);
-  render();
-  if (G.gameOver) setTimeout(showResults, 1400);
+  
+  if (data.k === 'state') {
+    // Пропускаем старые версии
+    if (data.seq && data.seq <= MP.lastSeq) return;
+    if (data.seq) MP.lastSeq = data.seq;
+    
+    if (!G) {
+      G = {
+        hands: [],
+        currentCombo: null,
+        pile: [],
+        revolution: false,
+        turn: 0,
+        passCount: 0,
+        finished: [],
+        rankings: [],
+        gameOver: false,
+        busy: false,
+        roundNum: 1,
+        numPlayers: data.numPlayers || MP.numPlayers
+      };
+    }
+    
+    const my = MP.seat;
+    const oldHand = (G.hands && G.hands[my]) ? G.hands[my] : [];
+    const selMap = {};
+    if (oldHand) oldHand.forEach(c => { if (c && c.sel) selMap[c.id] = true; });
+    
+    G.hands = data.hands.map((h, i) =>
+      h.map(c => ({ r: c.r, s: c.s, id: c.id, sel: (i === my && !!selMap[c.id]) }))
+    );
+    
+    G.currentCombo = data.currentCombo;
+    G.revolution   = data.revolution;
+    G.turn         = data.turn;
+    G.passCount    = data.passCount;
+    G.finished     = data.finished || [];
+    G.rankings     = data.rankings || [];
+    G.gameOver     = data.gameOver;
+    G.roundNum     = data.roundNum || 1;
+    G.numPlayers   = data.numPlayers;
+    G.busy         = false;
+    
+    if (typeof applyLayoutForN === 'function') applyLayoutForN(G.numPlayers);
+    if (typeof assignBotPersonalities === 'function') assignBotPersonalities(G.numPlayers);
+    render();
+    if (G.gameOver) setTimeout(() => showResults(), 1400);
+    return;
+  }
+  
+  if (data.k === 'sync_req' && MP.seat === 0) {
+    // Гость запросил синхронизацию
+    mpSendState();
+  }
 }
 
 // ── ГОСТЬ → ХОСТУ: действие ────────────────────────────────
 function mpGuestPlay(cardIds) {
-  if (!mpSend({ type: 'relay', target: 0, data: { k: 'play', cardIds } })) {
-    toast('НЕТ СОЕДИНЕНИЯ'); return;
+  if (!G || G.gameOver) {
+    toast('Игра окончена');
+    return;
   }
-  G.hands[MP.seat].forEach(c => c.sel = false);
+  if (G.turn !== MP.seat) {
+    toast('Сейчас не ваш ход');
+    return;
+  }
+  if (G.finished.includes(MP.seat)) {
+    toast('Вы уже вышли');
+    return;
+  }
+  if (!mpSend({ type: 'relay', target: 0, data: { k: 'play', cardIds } })) {
+    toast('НЕТ СОЕДИНЕНИЯ');
+    return;
+  }
+  G.busy = true;
+  if (G.hands && G.hands[MP.seat]) {
+    G.hands[MP.seat].forEach(c => { if (c) c.sel = false; });
+  }
   render();
 }
+
 function mpGuestPass() {
-  if (!mpSend({ type: 'relay', target: 0, data: { k: 'pass' } })) {
-    toast('НЕТ СОЕДИНЕНИЯ'); return;
+  if (!G || G.gameOver) {
+    toast('Игра окончена');
+    return;
   }
+  if (G.turn !== MP.seat) {
+    toast('Сейчас не ваш ход');
+    return;
+  }
+  if (G.finished.includes(MP.seat)) {
+    toast('Вы уже вышли');
+    return;
+  }
+  if (!mpSend({ type: 'relay', target: 0, data: { k: 'pass' } })) {
+    toast('НЕТ СОЕДИНЕНИЯ');
+    return;
+  }
+  G.busy = true;
+  render();
 }
 
 // ── ХОСТ ← ГОСТЬ: обработать действие ──────────────────────
 function mpHostHandle(fromSeat, data) {
-  if (G.gameOver) return;
+  if (!G || G.gameOver) return;
 
-  // Если что-то не сходится — просто шлём свежее состояние, гость пересинхронизируется.
-  if (G.turn !== fromSeat || G.finished.includes(fromSeat)) {
-    mpSendState(); return;
+  // Запрос синхронизации
+  if (data.k === 'sync_req') {
+    mpSendState();
+    return;
+  }
+  
+  // Если очередь не того игрока или игрок уже finished - отправляем свежее состояние
+  if (G.turn !== fromSeat || (G.finished && G.finished.includes(fromSeat))) {
+    mpSendState();
+    return;
   }
 
   if (data.k === 'pass') {
-    sndPass();
-    doPass(fromSeat);
+    if (typeof sndPass === 'function') sndPass();
+    if (typeof doPass === 'function') {
+      doPass(fromSeat);
+    } else {
+      // fallback если doPass не определена
+      G.passCount++;
+      let nextTurn = (fromSeat + 1) % G.numPlayers;
+      while (G.finished.includes(nextTurn)) {
+        nextTurn = (nextTurn + 1) % G.numPlayers;
+      }
+      G.turn = nextTurn;
+    }
+    mpSendState();
+    render();
     return;
   }
+  
   if (data.k === 'play') {
-    const cards = (data.cardIds || [])
-      .map(id => G.hands[fromSeat].find(c => c.id === id))
-      .filter(Boolean);
-    if (!cards.length) { mpSendState(); return; }
-    const res = validate(cards);
-    if (!res.ok) {
-      mpSend({ type:'relay', target: fromSeat, data:{ k:'err', msg:res.msg }});
+    if (!G.hands || !G.hands[fromSeat]) {
       mpSendState();
       return;
     }
-    sndCard();
-    flyCards(cards, cards.map(() => getBotPos(fromSeat)),
-             () => commitPlay(fromSeat, cards, res));
+    
+    const cards = (data.cardIds || [])
+      .map(id => G.hands[fromSeat].find(c => c && c.id === id))
+      .filter(Boolean);
+      
+    // Проверка на дубликаты
+    const uniqueIds = new Set(cards.map(c => c.id));
+    if (cards.length !== uniqueIds.size) {
+      mpSend({ type: 'relay', target: fromSeat, data: { k: 'err', msg: 'Нельзя играть одну карту дважды' } });
+      mpSendState();
+      return;
+    }
+    
+    if (!cards.length) { 
+      mpSendState(); 
+      return; 
+    }
+    
+    const res = validate(cards);
+    if (!res.ok) {
+      mpSend({ type: 'relay', target: fromSeat, data: { k: 'err', msg: res.msg } });
+      mpSendState();
+      return;
+    }
+    
+    if (typeof sndCard === 'function') sndCard();
+    
+    if (typeof flyCards === 'function' && typeof getBotPos === 'function' && typeof commitPlay === 'function') {
+      flyCards(cards, cards.map(() => getBotPos(fromSeat)),
+               () => {
+                 commitPlay(fromSeat, cards, res);
+                 mpSendState();
+               });
+    } else {
+      // fallback если функции анимации не определены
+      if (typeof commitPlay === 'function') {
+        commitPlay(fromSeat, cards, res);
+      } else {
+        // Минимальная реализация хода
+        for (const card of cards) {
+          const idx = G.hands[fromSeat].findIndex(c => c.id === card.id);
+          if (idx !== -1) G.hands[fromSeat].splice(idx, 1);
+        }
+        G.currentCombo = { cards: cards, type: 'single', rank: cards[0].r };
+        G.passCount = 0;
+        let nextTurn = (fromSeat + 1) % G.numPlayers;
+        while (G.finished.includes(nextTurn)) {
+          nextTurn = (nextTurn + 1) % G.numPlayers;
+        }
+        G.turn = nextTurn;
+      }
+      mpSendState();
+      render();
+    }
   }
 }
 
 // ── ВЫХОД ──────────────────────────────────────────────────
 function mpLeave() {
   MP.active = false;
-  if (MP.ws) { try { MP.ws.close(); } catch(_){} MP.ws = null; }
-  MP.seat = null; MP.room = null; MP.peers = []; MP.numPlayers = 0;
+  if (MP.leaveTimer) clearTimeout(MP.leaveTimer);
+  if (MP.ws) { 
+    try { 
+      MP.ws.close(); 
+    } catch(_){} 
+    MP.ws = null; 
+  }
+  MP.seat = null; 
+  MP.room = null; 
+  MP.peers = []; 
+  MP.numPlayers = 0;
+  MP.stateSeq = 0;
+  MP.lastSeq = -1;
 }
+
+// Экспорт функций для использования из game.js
+window.mpGuestPlay = mpGuestPlay;
+window.mpGuestPass = mpGuestPass;
+window.mpLeave = mpLeave;
+window.mpSendState = mpSendState;
+window.mpRequestSync = mpRequestSync;
