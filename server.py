@@ -68,10 +68,9 @@ async def tx(ws, obj):
 
 
 async def broadcast(room, obj, exclude=None):
-    for p in room["players"]:
-        if p["ws"] is exclude:
-            continue
-        await tx(p["ws"], obj)
+    targets = [p["ws"] for p in room["players"] if p["ws"] is not exclude]
+    if targets:
+        await asyncio.gather(*(tx(w, obj) for w in targets))
 
 
 def roster(room):
@@ -88,10 +87,14 @@ async def send_lobby_update(room):
 
 async def ws_handler(ws, path=None):
     clients[ws] = {}
+    print(f"[WS] connect (now {len(clients)} clients)")
     try:
         async for raw in ws:
-            m = json.loads(raw)
+            try: m = json.loads(raw)
+            except Exception: continue
             t = m.get("type")
+            info = clients.get(ws, {})
+            print(f"[WS] {t} from seat={info.get('seat')} room={info.get('room')}")
 
             if t == "create":
                 max_p = int(m.get("max_players") or 4)
@@ -105,6 +108,7 @@ async def ws_handler(ws, path=None):
                     "started": False,
                 }
                 clients[ws] = {"room": code, "seat": 0}
+                print(f"[WS] room {code} created max={max_p}")
                 await tx(ws, {"type": "created", "code": code,
                               "max": max_p, "seat": 0})
                 await send_lobby_update(rooms[code])
@@ -124,48 +128,55 @@ async def ws_handler(ws, path=None):
                                          "profile": m.get("profile") or {},
                                          "seat": seat})
                     clients[ws] = {"room": code, "seat": seat}
+                    print(f"[WS] {code}: seat {seat} joined ({len(r['players'])}/{r['max']})")
                     await tx(ws, {"type": "joined", "code": code,
                                   "max": r["max"], "seat": seat,
                                   "players": roster(r)})
                     await send_lobby_update(r)
                     if len(r["players"]) >= r["max"]:
                         r["started"] = True
+                        print(f"[WS] {code} started")
                         await broadcast(r, {"type": "start",
                                             "players": roster(r),
                                             "max": r["max"]})
 
             elif t == "relay":
-                info = clients.get(ws, {})
                 code = info.get("room")
                 r = rooms.get(code)
-                if not r:
-                    continue
+                if not r: continue
                 from_seat = info.get("seat", 0)
-                target = m.get("target")  # int seat | None
-                payload = {"type": "relay", "from": from_seat,
-                           "data": m.get("data")}
+                target = m.get("target")
+                data = m.get("data") or {}
+                payload = {"type": "relay", "from": from_seat, "data": data}
                 if target is not None:
                     tp = next((p for p in r["players"]
                                if p["seat"] == int(target)), None)
                     if tp:
+                        print(f"[WS] {code}: relay {data.get('k')} from {from_seat} -> seat {target}")
                         await tx(tp["ws"], payload)
+                    else:
+                        print(f"[WS] {code}: target {target} not found")
                 else:
+                    print(f"[WS] {code}: relay {data.get('k')} from {from_seat} -> ALL")
                     await broadcast(r, payload, exclude=ws)
     except websockets.ConnectionClosed:
         pass
+    except Exception as e:
+        print(f"[WS] handler error: {e}")
     finally:
         info = clients.pop(ws, {})
         code = info.get("room")
+        print(f"[WS] disconnect seat={info.get('seat')} room={code}")
         if code and code in rooms:
             r = rooms[code]
             r["players"] = [p for p in r["players"] if p["ws"] is not ws]
             if not r["players"]:
                 del rooms[code]
+                print(f"[WS] room {code} removed (empty)")
             elif r["started"]:
                 await broadcast(r, {"type": "opponent_left",
                                     "seat": info.get("seat")})
             else:
-                # подтянуть seat'ы (никто ещё не начал)
                 for i, p in enumerate(r["players"]):
                     p["seat"] = i
                     if p["ws"] in clients:

@@ -482,9 +482,8 @@ function startGameWithHands(hands) {
   _pileSig = '';
   _lastTimerTurn = -1;
   _glowSeat = null;
-  // Новая игра — генерируем новый seed для одиночных «ботов»
-  if (typeof _singleSeed !== 'undefined') _singleSeed = Math.random();
-  _lastAssignSig = '';
+  // Новая партия — освежаем имена/аватары/цвета ботов в одиночке
+  reshuffleBotPools();
   G = {
     hands, currentCombo: null, pile: [],
     revolution: false, turn: start,
@@ -696,36 +695,30 @@ function setAvatar(el, av) {
 
 const BOT_COLORS = ['#4488ff','#44ff88','#ffaa44','#cc66ff','#ff6688','#66e0ff','#ffcc44','#aaff66'];
 
-let _lastAssignSig = '';
-let _singleSeed = Math.random();
+// Стабильные перестановки на партию — генерируются один раз, потом не меняются.
 let _shuffledNames = null, _shuffledAvs = null, _shuffledCols = null;
+function reshuffleBotPools(){
+  _shuffledNames = shuffle([...JP_NAMES]);
+  _shuffledAvs   = shuffle([...AVATARS]);
+  _shuffledCols  = shuffle([...BOT_COLORS]);
+}
+
 function assignBotPersonalities(N) {
   N = N || 4;
+  if (!_shuffledNames) reshuffleBotPools();
+
   const inMP = (typeof MP !== 'undefined' && MP.active);
   const peerBySeat = {};
   if (inMP && MP.peers) MP.peers.forEach(p => peerBySeat[p.seat] = p);
 
-  // Кэшируем только случайные перестановки (имена/аватары/цвета ботов).
-  // Сами назначения в DOM делаем КАЖДЫЙ раз — это страховка от рассинхрона.
-  const sig = inMP
-    ? 'mp:' + N + ':' + (MP.peers || []).map(p => p.seat).sort().join(',')
-    : 'sp:' + N + ':' + _singleSeed;
-  if (sig !== _lastAssignSig || !_shuffledNames) {
-    _lastAssignSig = sig;
-    _shuffledNames = shuffle([...JP_NAMES]);
-    _shuffledAvs   = shuffle([...AVATARS]);
-    _shuffledCols  = shuffle([...BOT_COLORS]);
-  }
+  while (NAMES.length < N) NAMES.push('Игрок ' + (NAMES.length + 1));
 
+  // Применяем имена/аватары к УИ-слотам (всегда, на каждый вызов)
   const slots = [
     { disp: 1, avEl: 'av-1', nmEl: 'cn-1' },
     { disp: 2, avEl: 'av-2', nmEl: 'cn-2' },
     { disp: 3, avEl: 'av-3', nmEl: 'cn-3' },
   ];
-
-  // подгоняем размер NAMES под N
-  while (NAMES.length < N) NAMES.push('Игрок ' + (NAMES.length + 1));
-
   let pi = 0;
   slots.forEach(s => {
     const seat = seatOf(s.disp);
@@ -734,11 +727,7 @@ function assignBotPersonalities(N) {
     if (inMP && peerBySeat[seat]) {
       const peer = peerBySeat[seat];
       name = peer.name || ('Игрок ' + (seat + 1));
-      if (typeof peer.avatar === 'string' && peer.avatar.startsWith('data:')) {
-        avatar = { src: peer.avatar, emoji: '🖼' };
-      } else {
-        avatar = AVATARS[Math.max(0, Math.min(AVATARS.length-1, peer.avatar|0))];
-      }
+      avatar = AVATARS[Math.max(0, Math.min(AVATARS.length-1, peer.avatar|0))];
       accent = _shuffledCols[pi % _shuffledCols.length];
     } else {
       name   = _shuffledNames[pi % _shuffledNames.length];
@@ -753,14 +742,15 @@ function assignBotPersonalities(N) {
     setAvatar(avEl, avatar);
     if (avEl) avEl.style.setProperty('--bot-accent', accent);
   });
-  // моё имя в MP
-  if (inMP) NAMES[MP.seat] = (MP.profile && MP.profile.name) || 'Я';
-  // Дополнительная гарантия: для ВСЕХ peers пишем имя в NAMES,
-  // даже если их display-слот не отрисовался (защита от любых race-conditions).
-  if (inMP && MP.peers) {
-    MP.peers.forEach(p => {
-      NAMES[p.seat] = p.name || ('Игрок ' + (p.seat + 1));
-    });
+
+  // NAMES для всех peers (даже если их слот скрыт/не отрисован)
+  if (inMP) {
+    NAMES[MP.seat] = (MP.profile && MP.profile.name) || 'Я';
+    if (MP.peers) {
+      MP.peers.forEach(p => {
+        NAMES[p.seat] = p.name || ('Игрок ' + (p.seat + 1));
+      });
+    }
   }
 }
 
@@ -873,10 +863,10 @@ function renderHand() {
 let _pileSig = '';
 function renderPile() {
   const pc = document.getElementById('pcards');
-  // Пересчитываем стол только если комбо реально изменилось — иначе карты
-  // на столе не должны проигрывать анимацию каждый раз когда обновляется рука.
+  // Не перерисовываем стол если комбо не менялось — иначе при выборе
+  // карт в руке карты на столе бы прыгали (повторная bounce-анимация).
   const sig = G.currentCombo
-    ? G.currentCombo.cards.map(c => c.id).join('|') + ':' + (G.revolution ? 'R' : '')
+    ? G.currentCombo.cards.map(c => c.id).join('|')
     : '';
   if (sig !== _pileSig) {
     _pileSig = sig;

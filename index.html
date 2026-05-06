@@ -4,7 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>DaiFugo</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=15">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
 </head>
 <body>
 <div id="drag-ghost"></div>
@@ -45,11 +48,7 @@
         <div class="mp-av" data-av="2"><img src="av3.jpg" alt=""></div>
         <div class="mp-av" data-av="3"><img src="av4.jpg" alt=""></div>
         <div class="mp-av" data-av="4"><img src="av5.jpg" alt=""></div>
-        <div class="mp-av mp-av-upload" id="mp-av-custom" title="Загрузить свою">
-          <span class="mp-av-plus">+</span>
-        </div>
       </div>
-      <input type="file" id="mp-av-file" accept="image/*" style="display:none">
     </div>
 
     <div class="mp-status" id="mp-status-prof"></div>
@@ -187,6 +186,9 @@
   ПОВЕРНИТЕ<br>УСТРОЙСТВО<br>ГОРИЗОНТАЛЬНО
 </div>
 
+<!-- DEBUG лог (включается через ?debug=1 в URL) -->
+<div id="dbg-log"></div>
+
 <!-- RESULT OVERLAY -->
 <div id="overlay" class="h">
   <div class="rbox">
@@ -210,8 +212,8 @@
   </div>
 </div>
 
-<script src="cards.js"></script>
-<script src="multiplayer.js"></script>
-<script src="game.js"></script>
+<script src="cards.js?v=15"></script>
+<script src="multiplayer.js?v=15"></script>
+<script src="game.js?v=15"></script>
 </body>
 </html>
