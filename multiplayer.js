@@ -17,10 +17,11 @@
 //      { type:'error',   msg }
 //
 //  data.k:
-//      'state' — хост → всем гостям (полное состояние игры)
-//      'play'  — гость → хосту (мой ход с указанными ID карт)
-//      'pass'  — гость → хосту (мой пас)
-//      'err'   — хост → гостю (валидация не прошла)
+//      'state'    — хост → всем гостям (полное состояние игры) с порядковым seq
+//      'play'     — гость → хосту (мой ход с указанными ID карт)
+//      'pass'     — гость → хосту (мой пас)
+//      'sync_req' — гость → хосту (запрос свежего state, если что-то рассинхронилось)
+//      'err'      — хост → гостю (валидация не прошла)
 // ============================================================
 
 const MP = {
@@ -32,6 +33,12 @@ const MP = {
   profile: { name: 'ИГРОК', avatar: 0 },
   peers: [],
   selectedCount: 4,
+  // Порядковая нумерация state-пакетов: хост увеличивает на каждый send,
+  // гость игнорирует пакеты с seq <= lastSeq (защита от out-of-order).
+  stateSeq: 0,
+  lastSeq: -1,
+  // ID таймера выхода (чтобы можно было отменить при пересоздании комнаты)
+  leaveTimer: null,
 };
 
 const WS_PROTO = (location.protocol === 'https:') ? 'wss:' : 'ws:';
@@ -67,8 +74,7 @@ function mpToRoomStep(){
 function mpToProfileStep(){
   document.getElementById('online').dataset.step = 'profile';
   mpProfileStatus('');
-  if (MP.ws) { try { MP.ws.close(); } catch(_){} MP.ws = null; }
-  MP.active = false; MP.seat = null; MP.room = null; MP.peers = [];
+  mpLeave();
   const w = document.getElementById('mp-waiting');  if (w) w.style.display = 'none';
   const r = document.getElementById('mp-roster');    if (r) r.innerHTML = '';
 }
@@ -119,7 +125,12 @@ function mpConnect(onOpen) {
   MP.ws.onerror   = () => { mpSetStatus('Нет связи с сервером', '#ff5555'); };
   MP.ws.onclose   = () => {
     mlog('WS close');
-    if (MP.active) { toast('СОЕДИНЕНИЕ ПОТЕРЯНО'); MP.active = false; goTitle(); }
+    if (MP.active) {
+      toast('СОЕДИНЕНИЕ ПОТЕРЯНО');
+      MP.active = false;
+      if (MP.leaveTimer) clearTimeout(MP.leaveTimer);
+      MP.leaveTimer = setTimeout(goTitle, 1500);
+    }
     else if (!opened) mpSetStatus('Сервер не отвечает', '#ff5555');
   };
 }
@@ -145,9 +156,11 @@ function mpResetLobbyUi(){
   const w  = document.getElementById('mp-waiting');  if (w) w.style.display = 'none';
   const r  = document.getElementById('mp-roster');    if (r) r.innerHTML = '';
   const cd = document.getElementById('mp-code-display'); if (cd) cd.textContent = '';
+  if (MP.leaveTimer) { clearTimeout(MP.leaveTimer); MP.leaveTimer = null; }
   if (MP.ws) { try { MP.ws.close(); } catch(_){} MP.ws = null; }
   MP.active = false; MP.seat = null; MP.room = null;
   MP.peers = []; MP.numPlayers = 0;
+  MP.stateSeq = 0; MP.lastSeq = -1;
 }
 
 function mpCreateRoom() {
@@ -214,9 +227,21 @@ function mpHandleMsg(msg) {
       return;
 
     case 'opponent_left':
-      toast('ИГРОК ВЫШЕЛ');
-      MP.active = false;
-      setTimeout(goTitle, 1500);
+      // Если ушёл хост — игра не может продолжаться, все возвращаются в меню.
+      // Если ушёл гость и я хост — пересылаю всем свежее состояние.
+      if (msg.seat === 0 && MP.seat !== 0) {
+        toast('ХОСТ ВЫШЕЛ');
+        MP.active = false;
+        if (MP.leaveTimer) clearTimeout(MP.leaveTimer);
+        MP.leaveTimer = setTimeout(goTitle, 1500);
+      } else if (MP.seat === 0) {
+        // Я хост — кто-то из гостей вышел. Шлём свежий state остальным.
+        toast('ИГРОК ВЫШЕЛ');
+        if (MP.active && G && !G.gameOver) mpSendState();
+      } else {
+        // Гость с гостем — просто уведомляем
+        toast('ИГРОК ВЫШЕЛ');
+      }
       return;
 
     case 'error':
@@ -236,6 +261,7 @@ function mpUpdateRoster(players) {
     const idx = Math.max(0, Math.min(4, (p.avatar|0)));
     img.src = `av${idx+1}.jpg`;
     img.alt = '';
+    img.onerror = () => { img.onerror = null; img.src = 'av1.jpg'; };
     const nm = document.createElement('div');
     nm.textContent = p.name || ('Игрок ' + (p.seat+1));
     row.appendChild(img); row.appendChild(nm);
@@ -261,15 +287,19 @@ function mpStartGame() {
     if (typeof applyLayoutForN === 'function') applyLayoutForN(MP.numPlayers);
     if (typeof assignBotPersonalities === 'function') assignBotPersonalities(MP.numPlayers);
     render();
+    // Страховка: если первый state от хоста потерялся, явно запросим свежий.
+    setTimeout(mpRequestSync, 600);
   }
 }
 
 // ── ХОСТ → ВСЕМ: единый broadcast полного состояния ────────
 function mpSendState() {
-  if (!MP.active || MP.seat !== 0) return;
+  if (!MP.active || MP.seat !== 0 || !G) return;
+  MP.stateSeq++;
   const state = {
     k: 'state',
-    hands: G.hands.map(h => h.map(c => ({ r: c.r, s: c.s, id: c.id }))),
+    seq: MP.stateSeq,
+    hands: G.hands.map(h => h ? h.map(c => ({ r: c.r, s: c.s, id: c.id })) : []),
     currentCombo: G.currentCombo,
     revolution:   G.revolution,
     turn:         G.turn,
@@ -283,19 +313,32 @@ function mpSendState() {
   mpSend({ type: 'relay', data: state });    // без target = всем гостям
 }
 
+// ── ГОСТЬ → ХОСТУ: явный запрос свежего состояния ──────────
+function mpRequestSync() {
+  if (!MP.active || MP.seat === 0) return;
+  mpSend({ type: 'relay', target: 0, data: { k: 'sync_req' } });
+}
+
 // ── ГОСТЬ ← ХОСТ: применяем состояние ──────────────────────
 function mpGuestHandle(fromSeat, data) {
   if (data.k === 'err') {
     sndError(); toast(data.msg || 'НЕЛЬЗЯ');
-    G.busy = false; render();
+    if (G) G.busy = false;
+    render();
     return;
   }
   if (data.k !== 'state') return;
 
+  // Игнорируем устаревшие state-пакеты, пришедшие не по порядку
+  if (typeof data.seq === 'number') {
+    if (data.seq <= MP.lastSeq) return;
+    MP.lastSeq = data.seq;
+  }
+
   const my = MP.seat;
-  const oldHand = (G.hands && G.hands[my]) || [];
+  const oldHand = (G && G.hands && G.hands[my]) || [];
   const selMap  = {};
-  oldHand.forEach(c => { if (c.sel) selMap[c.id] = true; });
+  oldHand.forEach(c => { if (c && c.sel) selMap[c.id] = true; });
 
   G.hands = data.hands.map((h, i) =>
     h.map(c => ({ r: c.r, s: c.s, id: c.id, sel: (i === my && !!selMap[c.id]) }))
@@ -304,8 +347,8 @@ function mpGuestHandle(fromSeat, data) {
   G.revolution   = data.revolution;
   G.turn         = data.turn;
   G.passCount    = data.passCount;
-  G.finished     = data.finished;
-  G.rankings     = data.rankings;
+  G.finished     = data.finished || [];
+  G.rankings     = data.rankings || [];
   G.gameOver     = data.gameOver;
   G.roundNum     = data.roundNum;
   G.numPlayers   = data.numPlayers;
@@ -319,24 +362,36 @@ function mpGuestHandle(fromSeat, data) {
 
 // ── ГОСТЬ → ХОСТУ: действие ────────────────────────────────
 function mpGuestPlay(cardIds) {
+  if (!G || G.gameOver) { toast('Игра окончена'); return; }
+  if (G.turn !== MP.seat) { toast('Сейчас не ваш ход'); return; }
+  if (G.finished && G.finished.includes(MP.seat)) { toast('Вы уже вышли'); return; }
   if (!mpSend({ type: 'relay', target: 0, data: { k: 'play', cardIds } })) {
     toast('НЕТ СОЕДИНЕНИЯ'); return;
   }
-  G.hands[MP.seat].forEach(c => c.sel = false);
+  G.busy = true;
+  if (G.hands && G.hands[MP.seat]) G.hands[MP.seat].forEach(c => { if (c) c.sel = false; });
   render();
 }
 function mpGuestPass() {
+  if (!G || G.gameOver) { toast('Игра окончена'); return; }
+  if (G.turn !== MP.seat) { toast('Сейчас не ваш ход'); return; }
+  if (G.finished && G.finished.includes(MP.seat)) { toast('Вы уже вышли'); return; }
   if (!mpSend({ type: 'relay', target: 0, data: { k: 'pass' } })) {
     toast('НЕТ СОЕДИНЕНИЯ'); return;
   }
+  G.busy = true;
+  render();
 }
 
 // ── ХОСТ ← ГОСТЬ: обработать действие ──────────────────────
 function mpHostHandle(fromSeat, data) {
-  if (G.gameOver) return;
+  // Запрос на ресинк может прийти когда угодно
+  if (data.k === 'sync_req') { mpSendState(); return; }
+
+  if (!G || G.gameOver) return;
 
   // Если что-то не сходится — просто шлём свежее состояние, гость пересинхронизируется.
-  if (G.turn !== fromSeat || G.finished.includes(fromSeat)) {
+  if (G.turn !== fromSeat || (G.finished && G.finished.includes(fromSeat))) {
     mpSendState(); return;
   }
 
@@ -346,10 +401,23 @@ function mpHostHandle(fromSeat, data) {
     return;
   }
   if (data.k === 'play') {
-    const cards = (data.cardIds || [])
-      .map(id => G.hands[fromSeat].find(c => c.id === id))
+    if (!G.hands || !G.hands[fromSeat]) { mpSendState(); return; }
+
+    const ids = data.cardIds || [];
+    // Защита от дубликатов: один и тот же ID не должен играться дважды
+    if (new Set(ids).size !== ids.length) {
+      mpSend({ type:'relay', target: fromSeat,
+               data:{ k:'err', msg:'ДУБЛИКАТЫ КАРТ' }});
+      mpSendState();
+      return;
+    }
+    const cards = ids
+      .map(id => G.hands[fromSeat].find(c => c && c.id === id))
       .filter(Boolean);
-    if (!cards.length) { mpSendState(); return; }
+    if (!cards.length || cards.length !== ids.length) {
+      mpSendState(); return;
+    }
+
     const res = validate(cards);
     if (!res.ok) {
       mpSend({ type:'relay', target: fromSeat, data:{ k:'err', msg:res.msg }});
@@ -365,6 +433,8 @@ function mpHostHandle(fromSeat, data) {
 // ── ВЫХОД ──────────────────────────────────────────────────
 function mpLeave() {
   MP.active = false;
+  if (MP.leaveTimer) { clearTimeout(MP.leaveTimer); MP.leaveTimer = null; }
   if (MP.ws) { try { MP.ws.close(); } catch(_){} MP.ws = null; }
   MP.seat = null; MP.room = null; MP.peers = []; MP.numPlayers = 0;
+  MP.stateSeq = 0; MP.lastSeq = -1;
 }
