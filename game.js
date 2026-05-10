@@ -213,7 +213,7 @@ function goTitle() {
   // Abort any in-flight game: invalidate timers, clear state, kill flying cards
   GAME_GEN++;
   if (G) G.aborted = true;
-  _pileSig = ''; _lastTimerTurn = -1; clearTurnTimer();
+  _pileSig = null; _lastTimerTurn = -1; clearTurnTimer();
   G = { hands:[[],[],[],[]], currentCombo:null, pile:[], revolution:false,
         turn:0, passCount:0, finished:[], rankings:[], gameOver:true, busy:false,
         aborted:true, numPlayers: 4 };
@@ -447,6 +447,10 @@ function newGame() {
 
   const N = currentNumPlayers();
   applyLayoutForN(N);
+  // КРИТИЧНО: установить G.numPlayers ДО assignBotPersonalities, иначе
+  // seatOf/displayOf считают со старым N и расставляют ботов вместо игроков.
+  if (!G) G = {};
+  G.numPlayers = N;
   assignBotPersonalities(N);
 
   for (let i = 1; i <= 3; i++) {
@@ -479,9 +483,12 @@ function startGameWithHands(hands) {
 
   focusIdx = 0;
   GAME_GEN++;
-  _pileSig = '';
+  _pileSig = null;
   _lastTimerTurn = -1;
   _glowSeat = null;
+  // Принудительно очищаем DOM-стола от карт прошлой партии
+  const _pcInit = document.getElementById('pcards');
+  if (_pcInit) _pcInit.innerHTML = '';
   // Новая партия — освежаем имена/аватары/цвета ботов в одиночке
   reshuffleBotPools();
   G = {
@@ -860,7 +867,7 @@ function renderHand() {
   }
 }
 
-let _pileSig = '';
+let _pileSig = null;        // null = ещё не рисовали; '' = рисовали, стол пуст
 function renderPile() {
   const pc = document.getElementById('pcards');
   // Не перерисовываем стол если комбо не менялось — иначе при выборе

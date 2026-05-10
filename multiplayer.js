@@ -272,6 +272,11 @@ function mpUpdateRoster(players) {
 // ── СТАРТ ИГРЫ ─────────────────────────────────────────────
 function mpStartGame() {
   prevRankings = null;
+  // На всякий случай сбрасываем кэш стола, чтобы DOM прошлой партии не остался
+  if (typeof _pileSig !== 'undefined') _pileSig = null;
+  const _pc = document.getElementById('pcards');
+  if (_pc) _pc.innerHTML = '';
+
   if (MP.seat === 0) {
     // Хост — запускает игру, после render() автоматически отправит state
     newGame();
