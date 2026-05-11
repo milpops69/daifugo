@@ -998,9 +998,6 @@ function tryPlayerPlay(cards) {
 
 function playerPlaySelected() {
   const mp = myPlayer();
-  console.log('[PLAY-CLICK] turn=', G.turn, 'mp=', mp,
-              'finished=', G.finished, 'over=', G.gameOver, 'busy=', G.busy,
-              'selCnt=', G.hands[mp] ? G.hands[mp].filter(c => c.sel).length : 0);
   if (G.turn!==mp) { toast('НЕ ВАШ ХОД'); return; }
   if (G.finished.includes(mp)) { toast('ВЫ УЖЕ ВЫШЛИ'); return; }
   if (G.gameOver) { toast('ИГРА ОКОНЧЕНА'); return; }

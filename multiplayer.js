@@ -84,10 +84,9 @@ function mpConnect(onOpen) {
   catch (err) { mpSetStatus('Ошибка WS: ' + err.message, '#ff5555'); return; }
 
   let opened = false;
-  MP.ws.onopen    = () => { opened = true; mlog('WS open'); if (onOpen) onOpen(); };
+  MP.ws.onopen    = () => { opened = true; if (onOpen) onOpen(); };
   MP.ws.onmessage = e => {
     let m; try { m = JSON.parse(e.data); } catch (_) { return; }
-    const k = (m.data && m.data.k) ? m.data.k : '';
     mpHandleMsg(m);
   };
   MP.ws.onerror   = () => { mpSetStatus('Нет связи с сервером', '#ff5555'); };
@@ -106,8 +105,6 @@ function mpSend(obj) {
   if (!MP.ws || MP.ws.readyState !== WebSocket.OPEN) return false;
   try {
     MP.ws.send(JSON.stringify(obj));
-    const k = (obj.data && obj.data.k) ? obj.data.k : '';
-    const tg = (obj.target !== undefined) ? ('→' + obj.target) : '→ALL';
     return true;
   } catch (_) { return false; }
 }
@@ -282,8 +279,6 @@ function mpSendState() {
     roundNum:     G.roundNum || 1,
     numPlayers:   G.numPlayers,
   };
-  mlog('host sendState seq=', MP.stateSeq, 'turn=', G.turn,
-       'combo=', state.currentCombo);
   mpSend({ type: 'relay', data: state });
 }
 
@@ -402,9 +397,6 @@ function mpGuestPass() {
 }
 
 function mpHostHandle(fromSeat, data) {
-  mlog('host handle', data && data.k, 'from=', fromSeat,
-       'turn=', G && G.turn, 'busy=', G && G.busy);
-
   if (data.k === 'sync_req') { mpSendState(); return; }
 
   if (data.k === 'rematch') {
@@ -415,7 +407,7 @@ function mpHostHandle(fromSeat, data) {
     return;
   }
 
-  if (!G || G.gameOver) { mlog('host: game not active'); return; }
+  if (!G || G.gameOver) return;
 
   if (G.turn !== fromSeat || (G.finished && G.finished.includes(fromSeat))) {
     mpSendState(); return;
