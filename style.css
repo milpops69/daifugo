@@ -1,4 +1,4 @@
-/* ── ЛОКАЛЬНЫЕ ШРИФТЫ — грузятся с того же сервера, не зависят от Google ── */
+
 @font-face {
   font-family: 'Press Start 2P';
   font-style: normal; font-weight: 400; font-display: swap;
@@ -52,13 +52,9 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
     linear-gradient(90deg,rgba(200,30,100,.06) 1px,transparent 1px);
   background-size:16px 16px;}
 
-/* ── SCREENS ── */
 .screen{position:fixed;inset:0;z-index:10;display:flex;flex-direction:column;align-items:center;justify-content:center;}
 .screen.off{display:none!important;}
 
-/* ════════════════════════════════
-   TITLE
-════════════════════════════════ */
 #title{background:radial-gradient(ellipse 80% 70% at 50% 40%,#1f0520 0%,#080408 100%);}
 #title-bg{position:absolute;inset:0;width:100%;height:100%;z-index:0;image-rendering:pixelated;pointer-events:none;}
 #title .title-frame{position:relative;z-index:2;}
@@ -89,9 +85,6 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
   border-right-color:var(--pink2);border-bottom-color:var(--pink2);box-shadow:none;}
 .px-btn:disabled{opacity:.3;cursor:not-allowed;transform:none;}
 
-/* ════════════════════════════════
-   RULES
-════════════════════════════════ */
 #rules{background:rgba(8,3,10,.97);gap:16px;}
 .rules-back-btn{
   position:fixed;top:18px;left:18px;font-size:22px;
@@ -107,14 +100,10 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
 .rules-body{font-family:'VT323',monospace;font-size:19px;color:#ddaabb;line-height:1.4;}
 .rules-body strong{color:var(--gold2);}
 
-/* ════════════════════════════════
-   GAME SCREEN
-════════════════════════════════ */
 #game{
   flex-direction:column;justify-content:flex-start;align-items:stretch;padding:0;
   background:radial-gradient(ellipse 100% 80% at 50% 50%,#150820 0%,#07030a 100%);}
 
-/* floating menu — bottom right */
 #float-menu{
   position:fixed;bottom:10px;right:10px;z-index:100;
   display:flex;gap:6px;align-items:center;}
@@ -131,7 +120,6 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
 .sm-btn:active{transform:translate(1px,1px);border-left-color:var(--bg);border-top-color:var(--bg);
   border-right-color:var(--pink2);border-bottom-color:var(--pink2);}
 
-/* ── BOT TOP STRIP — 84px (fits 72px SC_MINI cards) ── */
 #bot1-strip {
   height: 84px;
   flex: 0 0 84px;
@@ -162,7 +150,7 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
 
 .chip-avatar {
   font-size: 28px; flex-shrink: 0; line-height: 1;
-  width: 46px; height: 46px; border-radius: 4px; overflow: hidden;
+  width: 46px; height: 46px; border-radius: 4px;
   display: flex; align-items: center; justify-content: center;
   background: var(--surface2);
   border: 3px solid var(--bot-accent, var(--border));
@@ -189,7 +177,6 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
 .chip-pas.show { display: inline-block; }
 @keyframes pasblink { 0%,100%{opacity:1} 50%{opacity:.4} }
 
-/* Bot card back row (top strip — horizontal) */
 .bot-hand-row {
   display: flex;
   flex-direction: row;
@@ -199,7 +186,6 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
   padding: 4px 10px;
 }
 
-/* Bot card back column (sidebots — vertical stack) */
 .bot-hand-col {
   display: flex;
   flex-direction: column;
@@ -210,7 +196,6 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
   padding: 4px 0;
 }
 
-/* context-specific overlap */
 .bot-hand-row .bot-card-back { margin-right: -26px; margin-bottom: 0; }
 .bot-hand-row .bot-card-back:last-child { margin-right: 0; }
 .bot-hand-col .bot-card-back { margin-bottom: -50px; margin-right: 0; }
@@ -222,11 +207,8 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
 }
 .bot-card-back canvas { display: block; image-rendering: pixelated; }
 
-
-/* ── MIDDLE ROW — fills remaining height ── */
 #mid{flex:1;display:flex;gap:0;overflow:hidden;min-height:0;}
 
-/* side bots — fixed 100px wide */
 .sidebot{
   width:100px;flex:0 0 100px;
   display:flex;flex-direction:column;align-items:center;justify-content:center;
@@ -254,7 +236,6 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
 .pas-label.show{display:block;}
 .bot-rbadge{font-family:'VT323',monospace;font-size:15px;padding:2px 5px;display:none;white-space:nowrap;}
 
-/* ── TABLE ZONE ── */
 #tzone{
   flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
   gap:6px;
@@ -263,7 +244,6 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
   overflow:hidden;padding:8px;}
 .felt-lbl{font-size:6px;color:var(--text2);letter-spacing:3px;flex-shrink:0;}
 
-/* DROP ZONE */
 #dropzone{
   width:100%;flex:1;min-height:0;
   background:
@@ -281,7 +261,6 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
   font-size:8px;color:var(--gold2);background:rgba(0,0,0,.6);}
 .empty-pile-txt{font-family:'VT323',monospace;font-size:22px;color:#3d1040;letter-spacing:2px;pointer-events:none;}
 
-/* BUTTONS ROW */
 .act-row{flex-shrink:0;display:flex;gap:8px;justify-content:center;}
 .act-btn{font-family:'Press Start 2P',monospace;font-size:9px;padding:8px 18px;
   background:var(--surface);color:var(--pink2);border:0;
@@ -298,7 +277,6 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
 .btn-play{background:#041e0a;color:var(--green);border-left-color:var(--green);border-top-color:var(--green);}
 .btn-play:hover:not(:disabled){background:#082e14;color:var(--gold2);border-left-color:var(--gold2);border-top-color:var(--gold2);}
 
-/* ── HAND AREA — tall enough for 108px cards + hover lift ── */
 #harea{
   height:136px;flex:0 0 136px;
   background:#080308;border-top:4px solid var(--pink);
@@ -310,7 +288,7 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
   display:flex;flex-wrap:nowrap;gap:3px;
   align-items:flex-end;
   justify-content:center;
-  justify-content:safe center;       /* при переполнении не срезает левую часть */
+  justify-content:safe center;
   overflow-x:auto;overflow-y:visible;
   height:130px;
   flex:1 1 auto;min-width:0;width:100%;
@@ -320,7 +298,6 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
 #hcards::-webkit-scrollbar{ display:none; height:0; width:0; }
 #hcards .card-wrap{ flex-shrink:0; }
 
-/* CARD WRAPS */
 .card-wrap{position:relative;cursor:grab;flex-shrink:0;transition:transform .12s, filter .12s, opacity .12s;}
 .card-wrap:hover{transform:translateY(-8px);}
 .card-wrap.focus{transform:translateY(-8px);filter:drop-shadow(0 0 4px var(--pink2));}
@@ -329,8 +306,6 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
 .card-wrap.dragging{opacity:.4;transform:translateY(-4px) scale(.92);cursor:grabbing;}
 .card-wrap canvas{display:block;image-rendering:pixelated;}
 
-
-/* pile cards */
 .pile-card-wrap {
   flex-shrink: 0;
   animation: card-bounce .4s cubic-bezier(.22,1,.36,1) both;
@@ -342,7 +317,6 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
   100% { transform: translateY(0)     scale(1);    opacity: 1; }
 }
 
-/* TOAST */
 .toast{
   position:fixed;top:40%;left:50%;transform:translate(-50%,-50%);
   background:var(--surface);border:4px solid var(--pink2);
@@ -351,7 +325,6 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
   box-shadow:4px 4px 0 rgba(0,0,0,.7),0 0 24px rgba(255,68,153,.45);}
 @keyframes ta{0%{opacity:0;transform:translate(-50%,-62%) scale(.82);}15%{opacity:1;transform:translate(-50%,-50%) scale(1.04);}25%{transform:translate(-50%,-50%) scale(1);}70%{opacity:1;}100%{opacity:0;transform:translate(-50%,-43%);}}
 
-/* RESULT OVERLAY */
 #overlay{position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:400;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(3px);}
 #overlay.h{display:none;}
 .rbox{background:var(--surface);border:4px solid var(--pink2);
@@ -364,7 +337,6 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
 .rnum{font-size:22px;min-width:22px;}
 .rscore-tag{margin-left:auto;font-size:17px;font-weight:700;}
 
-/* EXCHANGE OVERLAY */
 #exchange-overlay{position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:450;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(3px);}
 #exchange-overlay.h{display:none;}
 .ex-box{width:460px;max-width:96vw;max-height:94vh;overflow-y:auto;padding:14px 18px;}
@@ -381,7 +353,6 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
 .ex-card-wrap canvas{display:block;image-rendering:pixelated;}
 .ex-confirm-btn{width:100%;padding:9px;margin-top:2px;font-size:9px;}
 
-/* PAS SPEECH BUBBLE */
 .pas-bubble{
   position:fixed;z-index:550;pointer-events:none;
   background:rgba(20,5,15,.96);border:3px solid var(--rose);
@@ -415,12 +386,8 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
   100%{opacity:0;transform:scale(.8);}
 }
 
-/* DRAG GHOST */
 #drag-ghost{position:fixed;pointer-events:none;z-index:1000;display:none;image-rendering:pixelated;opacity:.82;}
 
-/* ════════════════════════════════
-   ONLINE LOBBY
-════════════════════════════════ */
 #online{background:rgba(8,3,10,.97);}
 .mp-section{display:flex;flex-direction:column;gap:6px;margin-bottom:2px;}
 .mp-label{font-size:9px;color:var(--text2);letter-spacing:1px;}
@@ -433,11 +400,6 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
 .mp-input:focus{border-color:var(--gold2);}
 .mp-status{font-family:'VT323',monospace;font-size:16px;color:var(--pink3);min-height:18px;text-align:center;margin-top:6px;line-height:1.2;}
 
-/* ════════════════════════════════
-   МОБИЛЬНАЯ АДАПТАЦИЯ
-════════════════════════════════ */
-
-/* Подсказка повернуть телефон в портретной ориентации */
 .rotate-hint{
   display:none;position:fixed;inset:0;z-index:9000;
   background:rgba(8,3,12,.96);color:var(--pink2);
@@ -448,37 +410,31 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
 .rotate-hint .icon{font-size:48px;margin-bottom:14px;animation:rotate-anim 2s ease infinite;}
 @keyframes rotate-anim{0%,100%{transform:rotate(-90deg);}50%{transform:rotate(0deg);}}
 
-/* Палец должен листать руку, а не выбирать карту жестом */
 .card-wrap{ touch-action: pan-x; }
 
-/* На сенсорных устройствах подсветку фокуса карты не показываем */
 @media (hover: none){
   .card-wrap.focus{ transform: none; filter: none; }
   .card-wrap.focus.sel{ transform: translateY(-14px); filter: drop-shadow(0 0 6px var(--gold2)); }
 }
 
-/* ── Портретный мобильный — показываем подсказку повернуть ── */
 @media (max-width: 720px) and (orientation: portrait){
   .rotate-hint{display:flex;}
   #title, #game, #rules, #online{display:none !important;}
 }
 
-/* ── Меню/Новая на мобильном — drawer вместо float-menu ── */
 @media (max-width: 900px){
   #float-menu{display:none !important;}
   .mobile-drawer{display:block !important;}
 }
 
-/* ── Общие мобильные стили (≤900px) ── */
 @media (max-width: 900px){
-  /* Title */
+
   .title-frame { padding: 16px 18px; gap: 8px; }
   .title-en    { font-size: 22px; letter-spacing: 3px; }
   .title-cards { gap: 4px; transform: scale(.6); transform-origin: center; height: 64px; }
   .px-btns     { width: 200px; gap: 8px; }
   .px-btn      { font-size: 9px; padding: 10px 0; }
 
-  /* Лобби */
   .rules-box   { width: 94%; padding: 12px 14px; max-height: 92vh; overflow-y: auto; }
   .rules-back-btn { top: 8px; left: 8px; width: 36px; height: 36px; font-size: 18px; }
   .rules-body  { font-size: 15px; line-height: 1.3; }
@@ -487,7 +443,6 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
   .mp-av       { width: 44px; height: 44px; }
   .mp-count    { width: 42px; height: 34px; font-size: 11px; }
 
-  /* Игровое поле — горизонтальный landscape */
   #bot1-strip   { height: 56px; flex: 0 0 56px; padding: 2px; }
   .bot1-chip    { padding: 0 6px; gap: 5px; }
   .chip-avatar  { width: 32px; height: 32px; font-size: 18px; border-width: 2px; }
@@ -504,11 +459,9 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
   #tzone       { padding: 3px; gap: 3px; }
   #dropzone    { padding: 4px; }
 
-  /* Кнопки действий — компактнее на мобиле */
   .act-row     { gap: 6px; }
   .act-btn     { font-size: 14px; padding: 8px 14px; min-width: 44px; }
 
-  /* Рука игрока: горизонтальный скролл, без перекрытия (всё видно) */
   #harea       { height: 96px; flex: 0 0 96px; padding: 0; touch-action: pan-x; }
   #hcards      { height: 96px; padding: 12px 4px 4px; gap: 0; justify-content: flex-start;
                   overflow-x: auto; overflow-y: visible; -webkit-overflow-scrolling: touch;
@@ -516,20 +469,16 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
   #hcards .card-wrap{ touch-action: pan-x; width: 56px; }
   .card-wrap canvas { transform: scale(.7); transform-origin: bottom left; }
 
-  /* Тосты/облачка */
   .pas-bubble  { font-size: 14px; padding: 6px 10px; letter-spacing: 2px; }
   .toast       { font-size: 9px; padding: 8px 14px; }
 
-  /* Результаты */
   .rbox        { width: 92%; padding: 14px 16px; }
   .rtitle      { font-size: 9px; }
   .rrow        { font-size: 16px; padding: 5px 7px; }
 
-  /* Таймер заметнее на мобиле */
   #turn-timer  { height: 6px; flex: 0 0 6px; }
 }
 
-/* Совсем узкие landscape экраны (≤620px по ширине) */
 @media (max-width: 620px){
   .sidebot     { width: 50px; flex: 0 0 50px; }
   .bot-avatar  { width: 30px; height: 30px; font-size: 16px; }
@@ -565,14 +514,10 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
 .mp-roster img{width:22px;height:22px;border-radius:3px;image-rendering:pixelated;}
 .mp-roster .row.me{border-color:var(--gold2);}
 
-/* Двухшаговое лобби */
 #online .op-step{display:none;}
 #online[data-step="profile"] .op-profile{display:block;}
 #online[data-step="room"]    .op-room   {display:block;}
 
-/* Кастомный аватар */
-/* Кольцо-таймер вокруг аватарки активного игрока — наглядно показывает
-   сколько времени осталось на ход. Зелёный → жёлтый → красный, опустошается. */
 .bot-avatar, .chip-avatar { position: relative; }
 .avatar-ring{
   position:absolute; inset:-7px;
@@ -589,7 +534,7 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
 .avatar-ring .ring-fg{
   fill:none; stroke:#44ff88; stroke-width:7;
   stroke-linecap:round;
-  stroke-dasharray:289;          /* 2π·46 ≈ 289 */
+  stroke-dasharray:289;
   stroke-dashoffset:0;
   transform:rotate(-90deg);
   transform-origin:50% 50%;
@@ -610,7 +555,6 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
   100% { stroke:#ff1144; }
 }
 
-/* Таймер хода */
 #turn-timer{
   position:relative;height:5px;background:#1a0820;
   flex:0 0 5px;width:100%;
@@ -622,7 +566,6 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
   transition:width .12s linear, background .2s;
 }
 
-/* Мобильный drawer (меню/новая) — компактно, но заметно. Сверху, чуть правее центра. */
 .mobile-drawer{
   display:none;
   position:fixed;

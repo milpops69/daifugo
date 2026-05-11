@@ -1,6 +1,3 @@
-// ============================================================
-//  game.js — DaiFugo game logic v8
-// ============================================================
 
 const SUITS_ARR  = ['♠','♥','♦','♣'];
 const RANKS_ARR  = ['3','4','5','6','7','8','9','10','J','Q','K','A','2'];
@@ -15,7 +12,7 @@ const JP_NAMES = [
   'Мику','Сэн','Дайки','Рику','Мако','Кэн','Ная','Рин',
   'Асахи','Кота','Яма','Миу','Тая','Сэйя','Фуми','Тора'
 ];
-// Each entry: emoji shown by default; PNG replaces it if the file exists
+
 const AVATARS = [
   { src: 'av1.jpg', emoji: '🦦' },
   { src: 'av2.jpg', emoji: '🐕' },
@@ -32,7 +29,6 @@ let totalScores = [0,0,0,0];
 let gamesPlayed = 0;
 let prevRankings = null;
 
-// ── SOUND ENGINE ──────────────────────────────────────────
 const AC = (typeof AudioContext !== 'undefined') ? new AudioContext() : null;
 
 function beep(freq, dur, type = 'square', vol = 0.12, delay = 0) {
@@ -77,12 +73,11 @@ function sndHover()      { beep(720, 0.025, 'square', 0.05); }
 function sndClick()      { beep(960, 0.04, 'square', 0.09); beep(640, 0.05, 'square', 0.06, 0.03); }
 
 function sndCardHover() {
-  // soft triangle pluck — distinctly different from button hover
+
   beep(1320, 0.018, 'triangle', 0.05);
   beep(990,  0.04,  'triangle', 0.035, 0.018);
 }
 
-// Wire UI sounds — applies to buttons, back arrows, and player cards
 document.addEventListener('mouseover', e => {
   const t = e.target.closest && e.target.closest('.px-btn,.sm-btn,.act-btn,.rules-back-btn,.mp-av');
   if (t && !t.disabled && t._hoverSnd !== true) {
@@ -102,16 +97,12 @@ document.addEventListener('mousedown', e => {
   if (t && !t.disabled) sndClick();
 }, true);
 
-// ── HELPERS ───────────────────────────────────────────────
 function myPlayer() { return (typeof MP !== 'undefined' && MP.active) ? MP.seat : 0; }
 
-// Display: 0 = снизу (я), 1 = слева (sidebot), 2 = сверху (top strip), 3 = справа (sidebot)
-// REL_TO_DISP: для каждого N — какие display-слоты заняты и куда сажаем соседей.
-// rel = (seat - me + N) % N — это позиция игрока относительно меня по часовой стрелке.
 const REL_TO_DISP = {
-  2: { 1: 2 },                // я + один напротив (сверху)
-  3: { 1: 1, 2: 3 },          // я + слева + справа
-  4: { 1: 1, 2: 2, 3: 3 },    // я + лево/верх/право
+  2: { 1: 2 },
+  3: { 1: 1, 2: 3 },
+  4: { 1: 1, 2: 2, 3: 3 },
 };
 function getN() { return (G && G.numPlayers) || 4; }
 function displayOf(seat) {
@@ -160,8 +151,6 @@ let GAME_GEN = 0;
 let focusIdx = 0;
 function gameAlive(gen) { return gen === GAME_GEN && G && !G.aborted; }
 
-// ── ТАЙМЕР ХОДА ───────────────────────────────────────────
-// 20 секунд на ход; если игрок не успевает — автоматический пас.
 const TURN_LIMIT_MS = 20000;
 let _timerHandle = null;
 let _timerEnd    = 0;
@@ -177,7 +166,7 @@ function startTurnTimer(){
   clearTurnTimer();
   if (!G || G.gameOver) return;
   const mp = myPlayer();
-  // Таймер запускается только когда ходим именно мы
+
   if (G.turn !== mp || G.finished.includes(mp)) return;
   _timerEnd = Date.now() + TURN_LIMIT_MS;
   _timerHandle = setInterval(() => {
@@ -208,9 +197,8 @@ function updateTimerUi(remain, active){
   else                     bar.style.background = 'var(--green)';
 }
 
-// ── NAV ──────────────────────────────────────────────────
 function goTitle() {
-  // Abort any in-flight game: invalidate timers, clear state, kill flying cards
+
   GAME_GEN++;
   if (G) G.aborted = true;
   _pileSig = null; _lastTimerTurn = -1; clearTurnTimer();
@@ -219,7 +207,7 @@ function goTitle() {
         aborted:true, numPlayers: 4 };
   document.querySelectorAll('.toast').forEach(t => t.remove());
   document.querySelectorAll('.pas-bubble').forEach(b => b.remove());
-  // remove flying card canvases stuck mid-animation
+
   document.querySelectorAll('body > canvas').forEach(c => c.remove());
   clearAllPas();
   document.getElementById('overlay').classList.add('h');
@@ -241,7 +229,7 @@ function show(id)   {
     document.getElementById(s).classList.toggle('off', s !== id));
   const dr = document.getElementById('mobile-drawer');
   if (dr) dr.classList.remove('open');
-  // В мультиплеере прячем все кнопки «новая игра»
+
   const inMP = (typeof MP !== 'undefined' && MP.active);
   document.querySelectorAll('.btn-newgame').forEach(b => {
     b.style.display = inMP ? 'none' : '';
@@ -253,9 +241,6 @@ function toggleDrawer(){
   if (dr) dr.classList.toggle('open');
 }
 
-// ── ПОЛНОЭКРАННЫЙ РЕЖИМ + LANDSCAPE LOCK (только мобильные) ──
-// Полноэкранный держим всегда: каждый жест — попытка войти, если ещё не в нём.
-// Если игрок выйдет (например, открытием клавиатуры) — следующий жест вернёт нас.
 function fsActive(){
   return !!(document.fullscreenElement || document.webkitFullscreenElement
             || document.mozFullScreenElement || document.msFullscreenElement);
@@ -282,14 +267,11 @@ function lockLandscape(){
       screen.orientation.lock('landscape').catch(() => {});
   } catch (_) {}
 }
-// Любое действие пользователя (клик, тап, ввод, фокус-выход) — попытка вернуться в FS.
-// passive:true чтобы не мешать обработке тапов / скролла.
+
 ['click','touchend','pointerup','keyup','focusout','change'].forEach(ev =>
   document.addEventListener(ev, tryEnterFullscreen, { passive: true })
 );
 
-// Колесо мыши над рукой: vertical wheel → horizontal scroll
-// + отслеживание времени последнего скролла (чтобы тап после свайпа не выделил карту)
 let _hcardsScrollTime = 0;
 (function(){
   const el = document.getElementById('hcards');
@@ -302,14 +284,12 @@ let _hcardsScrollTime = 0;
   el.addEventListener('scroll', () => { _hcardsScrollTime = Date.now(); });
 })();
 
-// title card decoration
 (function() {
   const el = document.getElementById('title-cards');
   [{r:'A',s:'♠'},{r:'K',s:'♥'},{r:'JK',s:'★'},{r:'A',s:'♦'},{r:'K',s:'♣'}]
     .forEach(c => el.appendChild(makeCard(c, SC_HAND)));
 })();
 
-// Инжект SVG-кольца таймера в каждую аватарку
 (function(){
   const SVG_NS = 'http://www.w3.org/2000/svg';
   ['av-1','av-2','av-3'].forEach(id => {
@@ -329,7 +309,6 @@ let _hcardsScrollTime = 0;
   });
 })();
 
-// title pixel background animation — always running
 (function(){
   const cv = document.getElementById('title-bg');
   if (!cv) return;
@@ -390,7 +369,6 @@ let _hcardsScrollTime = 0;
   requestAnimationFrame(tick);
 })();
 
-// ── KEYBOARD SHORTCUTS ────────────────────────────────────
 document.addEventListener('keydown', e => {
   if (document.getElementById('game').classList.contains('off')) return;
   if (!document.getElementById('exchange-overlay').classList.contains('h')) return;
@@ -440,14 +418,11 @@ document.addEventListener('keydown', e => {
   }
 });
 
-// Сколько игроков в текущей партии. В одиночной — всегда 4 (1 человек + 3 бота).
-// В мультиплеере — то, что выбрал хост (2/3/4).
 function currentNumPlayers() {
   if (typeof MP !== 'undefined' && MP.active) return MP.numPlayers || 2;
   return 4;
 }
 
-// Скрываем UI-слоты, которые не используются при выбранном N
 function applyLayoutForN(N) {
   const used = REL_TO_DISP[N] || REL_TO_DISP[4];
   const inUse = new Set(Object.values(used));
@@ -459,7 +434,6 @@ function applyLayoutForN(N) {
   if (right) right.style.display = inUse.has(3) ? '' : 'none';
 }
 
-// ── NEW GAME ──────────────────────────────────────────────
 function newGame() {
   document.getElementById('overlay').classList.add('h');
   document.getElementById('exchange-overlay').classList.add('h');
@@ -467,8 +441,7 @@ function newGame() {
 
   const N = currentNumPlayers();
   applyLayoutForN(N);
-  // КРИТИЧНО: установить G.numPlayers ДО assignBotPersonalities, иначе
-  // seatOf/displayOf считают со старым N и расставляют ботов вместо игроков.
+
   if (!G) G = {};
   G.numPlayers = N;
   assignBotPersonalities(N);
@@ -486,7 +459,6 @@ function newGame() {
   deck.forEach((c,i) => hands[i % N].push(c));
   hands.forEach(h => h.sort((a,b) => STR[a.r]-STR[b.r]));
 
-  // Обмен после раунда — только в одиночной игре с 4 участниками
   const inMP = (typeof MP !== 'undefined' && MP.active);
   if (!inMP && N === 4 && prevRankings && prevRankings.length === 4) {
     showExchange(hands, prevRankings);
@@ -506,10 +478,10 @@ function startGameWithHands(hands) {
   _pileSig = null;
   _lastTimerTurn = -1;
   _glowSeat = null;
-  // Принудительно очищаем DOM-стола от карт прошлой партии
+
   const _pcInit = document.getElementById('pcards');
   if (_pcInit) _pcInit.innerHTML = '';
-  // Новая партия — освежаем имена/аватары/цвета ботов в одиночке
+
   reshuffleBotPools();
   G = {
     hands, currentCombo: null, pile: [],
@@ -522,16 +494,15 @@ function startGameWithHands(hands) {
 
   applyLayoutForN(N);
   render();
-  // В мультиплеере боты не запускаются — каждый ход за человеком
+
   const inMP = (typeof MP !== 'undefined' && MP.active);
   if (!inMP && G.turn !== myPlayer()) schedBot();
 }
 
-// ── CARD EXCHANGE ─────────────────────────────────────────
 let pendingHands = null;
-let exchangeGiving = [];   // cards player will give
-let exchangeReceiving = []; // cards player will receive
-let exchangeMode = null;   // 'give2', 'give1', 'receive', null
+let exchangeGiving = [];
+let exchangeReceiving = [];
+let exchangeMode = null;
 
 function showExchange(hands, rankings) {
   pendingHands = hands;
@@ -541,25 +512,24 @@ function showExchange(hands, rankings) {
 
   const byRank = {};
   rankings.forEach(({player, rank}) => byRank[rank] = player);
-  const p0 = byRank[0]; // Богач
-  const p3 = byRank[3]; // Нищий
-  const p1 = byRank[1]; // Богатый
-  const p2 = byRank[2]; // Бедняк
+  const p0 = byRank[0];
+  const p3 = byRank[3];
+  const p1 = byRank[1];
+  const p2 = byRank[2];
 
-  // Bots auto-exchange; player participates
   if (p0 === 0) {
-    // Player is Богач — must give away 2 cards (choose any)
+
     exchangeMode = 'give2';
     exchangeReceiving = hands[p3].slice(-2).map(c => ({...c}));
-    // Remove those from bot's hand
+
     exchangeReceiving.forEach(card => {
       const i = hands[p3].findIndex(c => c.id === card.id);
       if (i >= 0) hands[p3].splice(i, 1);
     });
-    // Bot p1 gives 1 worst to p2, p2 gives 1 best to p1
+
     doAutoExchange(hands, p1, p2, 1);
   } else if (p3 === 0) {
-    // Player is Нищий — must give 2 best cards (forced)
+
     exchangeMode = 'receive';
     exchangeGiving = hands[0].slice(-2).map(c => ({...c}));
     exchangeGiving.forEach(card => {
@@ -576,7 +546,7 @@ function showExchange(hands, rankings) {
     doAutoExchange(hands, p1, p2, 1);
     exchangeMode = 'viewonly';
   } else if (p1 === 0) {
-    // Player is Богатый — give 1 worst card
+
     exchangeMode = 'give1';
     exchangeReceiving = hands[p2].slice(-1).map(c => ({...c}));
     exchangeReceiving.forEach(card => {
@@ -585,7 +555,7 @@ function showExchange(hands, rankings) {
     });
     doAutoExchange(hands, p0, p3, 2);
   } else {
-    // Player is Бедняк — give 1 best card (forced)
+
     exchangeMode = 'viewonly';
     exchangeGiving = hands[0].slice(-1).map(c => ({...c}));
     exchangeGiving.forEach(card => {
@@ -646,7 +616,7 @@ function renderExchangeUI(rankings) {
     btn.disabled = true;
     renderExchangeHand();
   } else {
-    // viewonly
+
     const rank0 = rankings.findIndex(r => r.player === 0);
     const rankName = RANK_NAMES[rank0];
     const clr = RCLR[rank0];
@@ -707,22 +677,24 @@ function confirmExchange() {
 
 function updateScoreDisplay() {}
 
-// ── BOT PERSONALITIES ─────────────────────────────────────
 function setAvatar(el, av) {
   if (!el) return;
-  // Show emoji immediately (always works)
-  el.textContent = av.emoji;
-  // Silently try to load the PNG; replace emoji if it loads
+  const ring = el.querySelector('.avatar-ring');
+  el.innerHTML = '';
+  if (ring) el.appendChild(ring);
+  const span = document.createElement('span');
+  span.textContent = av.emoji;
+  span.style.cssText = 'line-height:1;';
+  el.appendChild(span);
   const img = document.createElement('img');
-  img.style.cssText = 'width:100%;height:100%;object-fit:cover;image-rendering:pixelated;display:block;';
-  img.onload  = () => { el.textContent = ''; el.appendChild(img); };
-  img.onerror = () => { /* keep emoji */ };
+  img.style.cssText = 'width:100%;height:100%;object-fit:cover;image-rendering:pixelated;display:block;border-radius:inherit;';
+  img.onload  = () => { if (span.parentNode) span.parentNode.removeChild(span); el.appendChild(img); };
+  img.onerror = () => {};
   img.src = av.src;
 }
 
 const BOT_COLORS = ['#4488ff','#44ff88','#ffaa44','#cc66ff','#ff6688','#66e0ff','#ffcc44','#aaff66'];
 
-// Стабильные перестановки на партию — генерируются один раз, потом не меняются.
 let _shuffledNames = null, _shuffledAvs = null, _shuffledCols = null;
 function reshuffleBotPools(){
   _shuffledNames = shuffle([...JP_NAMES]);
@@ -740,7 +712,6 @@ function assignBotPersonalities(N) {
 
   while (NAMES.length < N) NAMES.push('Игрок ' + (NAMES.length + 1));
 
-  // Применяем имена/аватары к УИ-слотам (всегда, на каждый вызов)
   const slots = [
     { disp: 1, avEl: 'av-1', nmEl: 'cn-1' },
     { disp: 2, avEl: 'av-2', nmEl: 'cn-2' },
@@ -770,7 +741,6 @@ function assignBotPersonalities(N) {
     if (avEl) avEl.style.setProperty('--bot-accent', accent);
   });
 
-  // NAMES для всех peers (даже если их слот скрыт/не отрисован)
   if (inMP) {
     NAMES[MP.seat] = (MP.profile && MP.profile.name) || 'Я';
     if (MP.peers) {
@@ -781,7 +751,6 @@ function assignBotPersonalities(N) {
   }
 }
 
-// ── RENDER ────────────────────────────────────────────────
 function render() {
   renderCounts();
   renderHand();
@@ -789,7 +758,7 @@ function render() {
   renderPile();
   renderActive();
   renderStatus();
-  // перезапуск таймера только при реальной смене хода / при game over
+
   const turnKey = G.gameOver ? 'over' : G.turn;
   if (turnKey !== _lastTimerTurn) {
     _lastTimerTurn = turnKey;
@@ -810,8 +779,7 @@ function renderCounts() {
 }
 
 function renderBotHands() {
-  // У оппонентов рисуем только "рубашки" по количеству карт.
-  // Значения карт никогда не показываем, даже если они есть в G.hands.
+
   [1,2,3].forEach(disp => {
     const el = document.getElementById('bot-hand-' + disp);
     if (!el) return;
@@ -843,7 +811,6 @@ function renderHand() {
   const hand = G.hands[mp];
   if (focusIdx >= hand.length) focusIdx = Math.max(0, hand.length - 1);
 
-  // Касательное устройство — фокус не подсвечиваем и автоматический scrollIntoView не делаем
   const isTouch = (window.matchMedia && window.matchMedia('(hover: none)').matches);
 
   hand.forEach((c, i) => {
@@ -854,17 +821,16 @@ function renderHand() {
     wrap.dataset.idx = i;
     wrap.appendChild(makeCard(c, SC_HAND));
 
-    // Тап / горизонт-свайп / вертикаль-drag — на мобильном решаем по направлению жеста.
     let _downX = 0, _downY = 0, _moved = false, _touchDrag = false;
     wrap.addEventListener('pointerdown', e => {
       _downX = e.clientX; _downY = e.clientY; _moved = false; _touchDrag = false;
-      // Мышь — сразу drag. Тач — ждём direction, чтоб не блокировать скролл руки.
+
       if (e.pointerType !== 'touch') startDrag(e, i, wrap, c);
     });
     wrap.addEventListener('pointermove', e => {
       const dx = e.clientX - _downX, dy = e.clientY - _downY;
       if (Math.abs(dx) > 6 || Math.abs(dy) > 6) _moved = true;
-      // На тач-устройстве: вертикаль-преобладание + движение вверх = тянем карту на стол
+
       if (e.pointerType === 'touch' && !_touchDrag && _moved) {
         if (dy < -10 && Math.abs(dy) >= Math.abs(dx)) {
           _touchDrag = true;
@@ -880,18 +846,17 @@ function renderHand() {
     if (!isTouch) wrap.addEventListener('mouseenter', () => { focusIdx = i; });
     el.appendChild(wrap);
   });
-  // scrollIntoView только на десктопе при навигации стрелочками
+
   if (!isTouch) {
     const focusEl = el.children[focusIdx];
     if (focusEl) focusEl.scrollIntoView({ block: 'nearest', inline: 'center' });
   }
 }
 
-let _pileSig = null;        // null = ещё не рисовали; '' = рисовали, стол пуст
+let _pileSig = null;
 function renderPile() {
   const pc = document.getElementById('pcards');
-  // Не перерисовываем стол если комбо не менялось — иначе при выборе
-  // карт в руке карты на столе бы прыгали (повторная bounce-анимация).
+
   const sig = G.currentCombo
     ? G.currentCombo.cards.map(c => c.id).join('|')
     : '';
@@ -928,7 +893,7 @@ function renderActive() {
   const my = G.turn===mp2 && !G.finished.includes(mp2) && !G.gameOver && !G.busy;
   document.getElementById('bps').disabled = !my;
   document.getElementById('bplay').disabled = !my;
-  // Подсветка аватара активного игрока (только для оппонентов и только в МП)
+
   applyTurnGlow();
 }
 
@@ -942,20 +907,19 @@ function applyTurnGlow(){
     document.querySelectorAll('.turn-glow').forEach(el => el.classList.remove('turn-glow'));
     _glowSeat = null; return;
   }
-  if (G.turn === _glowSeat) return; // ход не сменился — анимацию не перезапускаем
+  if (G.turn === _glowSeat) return;
   document.querySelectorAll('.turn-glow').forEach(el => el.classList.remove('turn-glow'));
   const disp = displayOf(G.turn);
   if (disp <= 0) { _glowSeat = null; return; }
   const av = document.getElementById('av-' + disp);
   if (!av) return;
-  void av.offsetWidth; // reflow → перезапуск CSS-анимации
+  void av.offsetWidth;
   av.classList.add('turn-glow');
   _glowSeat = G.turn;
 }
 
 function renderStatus() {}
 
-// ── DRAG & DROP ───────────────────────────────────────────
 let isDragging = false;
 let dragData   = null;
 
@@ -975,7 +939,6 @@ function startDrag(e, idx, wrap, card) {
   ghost.style.left = (e.clientX - PW/2) + 'px';
   ghost.style.top  = (e.clientY - PH/2) + 'px';
 
-  // Захватываем указатель — гарантированно доберём pointermove/up даже если палец ушёл с карты
   try { wrap.setPointerCapture(e.pointerId); } catch(_) {}
 
   const dz = document.getElementById('dropzone');
@@ -1009,14 +972,14 @@ function startDrag(e, idx, wrap, card) {
 
 function tryPlayerPlay(cards) {
   const inMP = (typeof MP !== 'undefined' && MP.active);
-  // Гость в MP — отправляем ход хосту, локально НЕ применяем (host разошлёт state)
+
   if (inMP && MP.seat > 0 && typeof mpGuestPlay === 'function') {
     const res = validate(cards);
     if (!res.ok) { sndError(); toast(res.msg); return; }
     mpGuestPlay(cards.map(c => c.id));
     return;
   }
-  // Хост в MP — фиксируем сразу без flyCards, чтобы state срочно ушёл всем
+
   if (inMP && MP.seat === 0) {
     const res = validate(cards);
     if (!res.ok) { sndError(); toast(res.msg); return; }
@@ -1024,7 +987,7 @@ function tryPlayerPlay(cards) {
     commitPlay(myPlayer(), cards, res);
     return;
   }
-  // Одиночка — обычный путь с flyCards-анимацией
+
   const res = validate(cards);
   if (!res.ok) { sndError(); toast(res.msg); return; }
   sndCard();
@@ -1128,7 +1091,6 @@ function flyCards(cards, srcPositions, cb) {
   });
 }
 
-// ── PLAYER ACTIONS ────────────────────────────────────────
 function toggleCard(idx) {
   const mp = myPlayer();
   if (G.turn!==mp||G.finished.includes(mp)||G.gameOver||G.busy) return;
@@ -1141,14 +1103,13 @@ function toggleCard(idx) {
 function playerPass() {
   const mp = myPlayer();
   if (G.turn!==mp||G.finished.includes(mp)||G.gameOver||G.busy) return;
-  // В мультиплеере гость (seat>0) отправляет действие хосту
+
   if (typeof MP !== 'undefined' && MP.active && MP.seat > 0
       && typeof mpGuestPass === 'function') { mpGuestPass(); return; }
   sndPass();
   doPass(mp);
 }
 
-// ── VALIDATE ──────────────────────────────────────────────
 function validate(cards) {
   if (!cards.length) return {ok:false, msg:'НЕТ КАРТ'};
   const jk = cards.filter(c => c.r==='JK');
@@ -1169,10 +1130,9 @@ function validate(cards) {
   return {ok:true, rank, count};
 }
 
-// ── COMMIT PLAY ───────────────────────────────────────────
 function commitPlay(who, cards, res) {
   clearAllPas();
-  G.busy = false;             // снимаем блок после анимации
+  G.busy = false;
   const hand = G.hands[who];
   for (const c of cards) {
     const i = hand.findIndex(h => h.id===c.id);
@@ -1205,7 +1165,6 @@ function commitPlay(who, cards, res) {
   nextTurn(who);
 }
 
-// ── PASS ──────────────────────────────────────────────────
 function showPas(who) {
   showPasBubble(who);
 }
@@ -1219,7 +1178,7 @@ function showPasBubble(who) {
   b.className = 'pas-bubble';
   b.textContent = 'ПАС';
   document.body.appendChild(b);
-  // size the bubble first (appended offscreen-ish)
+
   const bw = b.offsetWidth, bh = b.offsetHeight;
   let left, top, tail;
   if (disp === 2) {
@@ -1234,7 +1193,7 @@ function showPasBubble(who) {
     top  = r.top + r.height/2 - bh/2;
     b.classList.add('tail-right');
   }
-  // Clamp to viewport
+
   left = Math.max(8, Math.min(left, window.innerWidth - bw - 8));
   top  = Math.max(8, Math.min(top,  window.innerHeight - bh - 8));
   b.style.left = left + 'px';
@@ -1291,7 +1250,6 @@ function nextActive(from) {
   return n;
 }
 
-// ── FINISH PLAYER ─────────────────────────────────────────
 function finishPlayer(who) {
   G.finished.push(who);
   const ri = G.rankings.length;
@@ -1325,13 +1283,11 @@ function finishPlayer(who) {
   nextTurn(who);
 }
 
-// ── RESULTS ───────────────────────────────────────────────
 function showResults() {
   gamesPlayed++;
   G.rankings.forEach(({player,rank}) => totalScores[player]+=RANK_POINTS[rank]);
   prevRankings = [...G.rankings];
 
-  // Победная или проигрышная мелодия — по результату игрока
   const me = myPlayer();
   const myRow = G.rankings.find(r => r.player === me);
   if (myRow) {
@@ -1354,9 +1310,8 @@ function showResults() {
   document.getElementById('overlay').classList.remove('h');
 }
 
-// ── BOT AI ────────────────────────────────────────────────
 function schedBot() {
-  // В мультиплеере боты не используются — каждый ход за человеком.
+
   if (typeof MP !== 'undefined' && MP.active) return;
   if (G.busy) return; G.busy=true;
   const gen = GAME_GEN;
@@ -1427,19 +1382,17 @@ function botChoose(who, hand) {
     const triples= sorted.filter(([,cs])=>cs.length>=3);
     const pairs  = sorted.filter(([,cs])=>cs.length>=2);
 
-    // Play quad if revolution would help (we have many low cards)
     if (quads.length && !G.revolution) {
       const lowCount = nr.filter(c=>STR[c.r]<5).length;
       if (lowCount >= 4 || endGame) return quads[0][1].slice(0,4);
     }
 
     if (endGame) {
-      // Rush to finish: play anything
+
       if (sorted.length) return [sorted[0][1][0]];
       return jk.length ? [jk[0]] : null;
     }
 
-    // Prefer pairs for board control over singles
     if (pairs.length) return pairs[0][1].slice(0,2);
     if (sorted.length) return [sorted[0][1][0]];
     if (jk.length) return [jk[0]];
@@ -1477,12 +1430,11 @@ function botChoose(who, hand) {
   if (!cands.length) return null;
   cands.sort((a,b)=>a.s-b.s);
 
-  if (endGame) return cands[cands.length-1].cards; // play strongest to win faster
+  if (endGame) return cands[cands.length-1].cards;
   const nonJoker = cands.filter(c=>!c.joker);
   return nonJoker.length ? nonJoker[0].cards : cands[0].cards;
 }
 
-// ── TOAST ─────────────────────────────────────────────────
 function toast(msg) {
   const t = document.createElement('div'); t.className='toast'; t.textContent=msg;
   document.body.appendChild(t); setTimeout(()=>t.remove(),1900);

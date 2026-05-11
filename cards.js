@@ -1,18 +1,11 @@
-// ============================================================
-//  cards.js — Pixel-art card renderer
-//  Draws cards on <canvas> matching the reference image:
-//  white background, grey border, rank in corners,
-//  one big centered suit with staircase pixel edges.
-// ============================================================
 
-const SC_HAND = 3;   // hand card scale: 3px per pixel → 75×108px
-const SC_PILE = 4;   // table card scale: 4px per pixel → 100×144px
-const SC_MINI = 2;   // bot card back scale: 2px per pixel → 50×72px
+const SC_HAND = 3;
+const SC_PILE = 4;
+const SC_MINI = 2;
 const CW = 25, CH = 36;
 const PW = CW * SC_HAND;
 const PH = CH * SC_HAND;
 
-// 4×5 pixel font — matches reference "9" staircase style
 const GLYPH = {
   '3': [[0,1,1,0],[0,0,0,1],[0,1,1,0],[0,0,0,1],[0,1,1,0]],
   '4': [[1,0,1,0],[1,0,1,0],[1,1,1,1],[0,0,1,0],[0,0,1,0]],
@@ -20,7 +13,7 @@ const GLYPH = {
   '6': [[0,1,1,0],[1,0,0,0],[1,1,1,0],[1,0,0,1],[0,1,1,0]],
   '7': [[1,1,1,1],[0,0,0,1],[0,0,1,0],[0,1,0,0],[0,1,0,0]],
   '8': [[0,1,1,0],[1,0,0,1],[0,1,1,0],[1,0,0,1],[0,1,1,0]],
-  '9': [[0,1,1,0],[1,0,0,1],[0,1,1,1],[0,0,0,1],[0,1,1,0]], // reference-matched
+  '9': [[0,1,1,0],[1,0,0,1],[0,1,1,1],[0,0,0,1],[0,1,1,0]],
   '0': [[0,1,1,0],[1,0,0,1],[1,0,0,1],[1,0,0,1],[0,1,1,0]],
   '1': [[0,1,0,0],[1,1,0,0],[0,1,0,0],[0,1,0,0],[1,1,1,0]],
   '2': [[0,1,1,0],[0,0,0,1],[0,1,1,0],[1,0,0,0],[1,1,1,1]],
@@ -30,7 +23,6 @@ const GLYPH = {
   'K': [[1,0,0,1],[1,0,1,0],[1,1,0,0],[1,0,1,0],[1,0,0,1]],
 };
 
-// 9×9 suit pixel maps — staircase pixel-art
 const DIAMOND = [
   [0,0,0,0,1,0,0,0,0],
   [0,0,0,1,1,1,0,0,0],
@@ -88,7 +80,6 @@ const STAR = [
 ];
 const SUIT_MAPS = { '♦': DIAMOND, '♠': SPADE, '♥': HEART, '♣': CLUB, '★': STAR };
 
-// 5×5 mini suit maps for corner pips — matches reference image exactly
 const DIAMOND_S = [
   [0,0,1,0,0],
   [0,1,1,1,0],
@@ -164,11 +155,6 @@ function drawSuit(ctx, suit, cx, cy, px, col) {
       if (m[r] && m[r][c]) ctx.fillRect(ox + c * px, oy + r * px, px, px);
 }
 
-/**
- * Create a canvas element for a card.
- * @param {object} card  - { r: rank string, s: suit string }
- * @param {number} sc    - pixel scale (SC_HAND or SC_PILE)
- */
 function makeCard(card, sc) {
   const w = CW * sc, h = CH * sc;
   const cv = document.createElement('canvas');
@@ -177,7 +163,7 @@ function makeCard(card, sc) {
   const ctx = cv.getContext('2d');
 
   if (card.r === 'JK') {
-    // Joker
+
     ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, w, h);
     ctx.fillStyle = '#aaaaaa';
     ctx.fillRect(0, 0, w, sc);      ctx.fillRect(0, h - sc, w, sc);
@@ -192,7 +178,6 @@ function makeCard(card, sc) {
 
   const col = isRed(card.s) ? '#8b0000' : '#1a1a1a';
 
-  // White face + grey border (matches reference exactly)
   ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, w, h);
   ctx.fillStyle = '#aaaaaa';
   ctx.fillRect(0, 0, w, sc);     ctx.fillRect(0, h - sc, w, sc);
@@ -200,23 +185,17 @@ function makeCard(card, sc) {
 
   const rk = card.r;
 
-  // Rank top-left
   drawRank(ctx, rk, sc * 2, sc * 2, sc, col);
 
-  // ONE big suit dead centre — 2.5× pixel size
   const suitPx = Math.round(sc * 2.5);
   drawSuit(ctx, card.s, Math.floor(w / 2), Math.floor(h / 2), suitPx, col);
 
-  // Rank bottom-right
   const rkW = rk === '10' ? 8 : 4;
   drawRank(ctx, rk, w - rkW * sc - sc * 2, h - sc * 2 - sc * 6, sc, col);
 
   return cv;
 }
 
-/**
- * Create a card back canvas.
- */
 function makeBack(sc) {
   const w = CW * sc, h = CH * sc;
   const cv = document.createElement('canvas');
@@ -232,7 +211,6 @@ function makeBack(sc) {
   ctx.fillRect(sc, sc, w - 2*sc, sc);    ctx.fillRect(sc, h - 2*sc, w - 2*sc, sc);
   ctx.fillRect(sc, sc, sc, h - 2*sc);    ctx.fillRect(w - 2*sc, sc, sc, h - 2*sc);
 
-  // dot pattern
   ctx.fillStyle = '#3d0a25';
   for (let y = sc*3; y < h - sc*2; y += sc*4)
     for (let x = sc*3; x < w - sc*2; x += sc*4) {

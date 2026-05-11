@@ -13,7 +13,6 @@ PORT = int(os.environ.get("PORT", 8000))
 ROOT = Path(__file__).parent.resolve()
 IS_CLOUD = "PORT" in os.environ
 
-# Чтобы Render отдавал .woff2 с правильным MIME-типом
 mimetypes.add_type("font/woff2", ".woff2")
 mimetypes.add_type("font/woff",  ".woff")
 
@@ -29,7 +28,6 @@ except ImportError:
     print("=" * 60)
     sys.exit(1)
 
-
 def get_lan_ip():
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
@@ -40,23 +38,14 @@ def get_lan_ip():
     finally:
         s.close()
 
-
-# ── Игровое состояние ────────────────────────────────────
-# rooms[code] = {
-#   "max":   int,                 # 2..4
-#   "players": [{ws, profile, seat}, ...],
-#   "started": bool,
-# }
 rooms   = {}
-clients = {}   # ws -> {room, seat}
-
+clients = {}
 
 def gen_code():
     while True:
         code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
         if code not in rooms:
             return code
-
 
 async def tx(ws, obj):
     if ws is None:
@@ -66,24 +55,20 @@ async def tx(ws, obj):
     except Exception:
         pass
 
-
 async def broadcast(room, obj, exclude=None):
     targets = [p["ws"] for p in room["players"] if p["ws"] is not exclude]
     if targets:
         await asyncio.gather(*(tx(w, obj) for w in targets))
-
 
 def roster(room):
     """Список профилей игроков в комнате (для лобби)."""
     return [{"seat": p["seat"], "name": p["profile"].get("name", ""),
              "avatar": p["profile"].get("avatar", 0)} for p in room["players"]]
 
-
 async def send_lobby_update(room):
     msg = {"type": "lobby_update", "players": roster(room),
            "max": room["max"]}
     await broadcast(room, msg)
-
 
 async def ws_handler(ws, path=None):
     clients[ws] = {}
@@ -183,8 +168,6 @@ async def ws_handler(ws, path=None):
                         clients[p["ws"]]["seat"] = i
                 await send_lobby_update(r)
 
-
-# ── HTTP-обработчик (для не-WS запросов) ─────────────────
 def http_response(status, body, content_type="text/plain; charset=utf-8",
                   extra=None):
     if isinstance(body, str):
@@ -199,16 +182,14 @@ def http_response(status, body, content_type="text/plain; charset=utf-8",
         headers.extend(extra)
     return (status, headers, body)
 
-
 async def process_request(path, request_headers):
     upgrade = request_headers.get("Upgrade", "") or ""
-    # WebSocket upgrade — пропускаем дальше в ws_handler
+
     if upgrade.lower() == "websocket":
         if path.startswith("/ws"):
             return None
         return http_response(404, "WebSocket доступен только на /ws")
 
-    # Обычный HTTP
     clean = path.split("?", 1)[0]
     if clean == "/lan-ip":
         return http_response(200, json.dumps({"ip": get_lan_ip(), "port": PORT}),
@@ -226,8 +207,6 @@ async def process_request(path, request_headers):
     return http_response(200, fp.read_bytes(),
                          mime or "application/octet-stream")
 
-
-# ── Запуск ───────────────────────────────────────────────
 async def main():
     async with ws_serve(ws_handler, "0.0.0.0", PORT,
                         process_request=process_request):
@@ -244,7 +223,6 @@ async def main():
             except Exception:
                 pass
         await asyncio.Future()
-
 
 if __name__ == "__main__":
     try:
