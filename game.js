@@ -309,6 +309,26 @@ let _hcardsScrollTime = 0;
     .forEach(c => el.appendChild(makeCard(c, SC_HAND)));
 })();
 
+// Инжект SVG-кольца таймера в каждую аватарку
+(function(){
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+  ['av-1','av-2','av-3'].forEach(id => {
+    const av = document.getElementById(id);
+    if (!av || av.querySelector('.avatar-ring')) return;
+    const svg = document.createElementNS(SVG_NS, 'svg');
+    svg.setAttribute('class', 'avatar-ring');
+    svg.setAttribute('viewBox', '0 0 100 100');
+    const bg = document.createElementNS(SVG_NS, 'circle');
+    bg.setAttribute('class', 'ring-bg');
+    bg.setAttribute('cx', '50'); bg.setAttribute('cy', '50'); bg.setAttribute('r', '46');
+    const fg = document.createElementNS(SVG_NS, 'circle');
+    fg.setAttribute('class', 'ring-fg');
+    fg.setAttribute('cx', '50'); fg.setAttribute('cy', '50'); fg.setAttribute('r', '46');
+    svg.appendChild(bg); svg.appendChild(fg);
+    av.appendChild(svg);
+  });
+})();
+
 // title pixel background animation — always running
 (function(){
   const cv = document.getElementById('title-bg');
@@ -988,10 +1008,26 @@ function startDrag(e, idx, wrap, card) {
 }
 
 function tryPlayerPlay(cards) {
+  const inMP = (typeof MP !== 'undefined' && MP.active);
+  // Гость в MP — отправляем ход хосту, локально НЕ применяем (host разошлёт state)
+  if (inMP && MP.seat > 0 && typeof mpGuestPlay === 'function') {
+    const res = validate(cards);
+    if (!res.ok) { sndError(); toast(res.msg); return; }
+    mpGuestPlay(cards.map(c => c.id));
+    return;
+  }
+  // Хост в MP — фиксируем сразу без flyCards, чтобы state срочно ушёл всем
+  if (inMP && MP.seat === 0) {
+    const res = validate(cards);
+    if (!res.ok) { sndError(); toast(res.msg); return; }
+    sndCard();
+    commitPlay(myPlayer(), cards, res);
+    return;
+  }
+  // Одиночка — обычный путь с flyCards-анимацией
   const res = validate(cards);
   if (!res.ok) { sndError(); toast(res.msg); return; }
   sndCard();
-  // Блокируем повторные действия и автопас на время анимации
   G.busy = true;
   if (typeof clearTurnTimer === 'function') clearTurnTimer();
   flyCards(cards, getPlayerCardPositions(cards), () => commitPlay(myPlayer(), cards, res));
@@ -999,7 +1035,13 @@ function tryPlayerPlay(cards) {
 
 function playerPlaySelected() {
   const mp = myPlayer();
-  if (G.turn!==mp||G.finished.includes(mp)||G.gameOver||G.busy) return;
+  console.log('[PLAY-CLICK] turn=', G.turn, 'mp=', mp,
+              'finished=', G.finished, 'over=', G.gameOver, 'busy=', G.busy,
+              'selCnt=', G.hands[mp] ? G.hands[mp].filter(c => c.sel).length : 0);
+  if (G.turn!==mp) { toast('НЕ ВАШ ХОД'); return; }
+  if (G.finished.includes(mp)) { toast('ВЫ УЖЕ ВЫШЛИ'); return; }
+  if (G.gameOver) { toast('ИГРА ОКОНЧЕНА'); return; }
+  if (G.busy) { toast('ПОДОЖДИТЕ…'); return; }
   const sel = G.hands[mp].filter(c => c.sel);
   if (!sel.length) { toast('ВЫБЕРИТЕ КАРТЫ'); return; }
   const inMP = (typeof MP !== 'undefined' && MP.active);
@@ -1007,8 +1049,6 @@ function playerPlaySelected() {
     mpGuestPlay(sel.map(c => c.id)); return;
   }
   if (inMP && MP.seat === 0) {
-    // Хост в MP: фиксируем ход немедленно, без flyCards.
-    // (flyCards-анимация ненадёжна когда state нужно срочно разослать.)
     const res = validate(sel);
     if (!res.ok) { sndError(); toast(res.msg); return; }
     sndCard();

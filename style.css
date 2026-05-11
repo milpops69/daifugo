@@ -571,23 +571,43 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
 #online[data-step="room"]    .op-room   {display:block;}
 
 /* Кастомный аватар */
-/* Подсветка аватара активного игрока — синхронно с таймером хода 20 сек.
-   Заметная толстая обводка, переходит зелёный → жёлтый → красный → пусто. */
-.bot-avatar.turn-glow, .chip-avatar.turn-glow{
-  animation: turn-glow 20s linear forwards !important;
-  border-width: 4px !important;
+/* Кольцо-таймер вокруг аватарки активного игрока — наглядно показывает
+   сколько времени осталось на ход. Зелёный → жёлтый → красный, опустошается. */
+.bot-avatar, .chip-avatar { position: relative; }
+.avatar-ring{
+  position:absolute; inset:-7px;
+  width:calc(100% + 14px); height:calc(100% + 14px);
+  pointer-events:none; opacity:0;
+  transition:opacity .15s;
+  z-index:5;
 }
-@keyframes turn-glow{
-  0%   { border-color:#44ff88 !important;
-         box-shadow: 0 0 0 4px rgba(68,255,136,.55), 0 0 24px 6px rgba(68,255,136,.85) !important; }
-  35%  { border-color:#aaff44 !important;
-         box-shadow: 0 0 0 3px rgba(170,255,68,.55), 0 0 20px 5px rgba(170,255,68,.85) !important; }
-  60%  { border-color:#ffcc44 !important;
-         box-shadow: 0 0 0 3px rgba(255,204,68,.55), 0 0 18px 4px rgba(255,204,68,.85) !important; }
-  85%  { border-color:#ff3366 !important;
-         box-shadow: 0 0 0 3px rgba(255,51,102,.6), 0 0 16px 4px rgba(255,51,102,.95) !important; }
-  100% { border-color:#ff1144 !important;
-         box-shadow: 0 0 0 0 transparent, 0 0 0 transparent !important; }
+.bot-avatar.turn-glow .avatar-ring,
+.chip-avatar.turn-glow .avatar-ring{ opacity:1; }
+.avatar-ring .ring-bg{
+  fill:none; stroke:rgba(0,0,0,.35); stroke-width:7;
+}
+.avatar-ring .ring-fg{
+  fill:none; stroke:#44ff88; stroke-width:7;
+  stroke-linecap:round;
+  stroke-dasharray:289;          /* 2π·46 ≈ 289 */
+  stroke-dashoffset:0;
+  transform:rotate(-90deg);
+  transform-origin:50% 50%;
+  filter:drop-shadow(0 0 4px currentColor);
+}
+.bot-avatar.turn-glow .avatar-ring .ring-fg,
+.chip-avatar.turn-glow .avatar-ring .ring-fg{
+  animation: ring-drain 20s linear forwards, ring-color 20s linear forwards;
+}
+@keyframes ring-drain{
+  from { stroke-dashoffset: 0;   }
+  to   { stroke-dashoffset: 289; }
+}
+@keyframes ring-color{
+  0%   { stroke:#44ff88; }
+  55%  { stroke:#ffcc44; }
+  85%  { stroke:#ff3366; }
+  100% { stroke:#ff1144; }
 }
 
 /* Таймер хода */
