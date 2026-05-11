@@ -298,7 +298,7 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
 #hcards::-webkit-scrollbar{ display:none; height:0; width:0; }
 #hcards .card-wrap{ flex-shrink:0; }
 
-.card-wrap{position:relative;cursor:grab;flex-shrink:0;transition:transform .12s, filter .12s, opacity .12s;}
+.card-wrap{position:relative;cursor:grab;flex-shrink:0;transition:transform .12s, filter .12s, opacity .12s;will-change:transform;transform:translateZ(0);}
 .card-wrap:hover{transform:translateY(-8px);}
 .card-wrap.focus{transform:translateY(-8px);filter:drop-shadow(0 0 4px var(--pink2));}
 .card-wrap.sel{transform:translateY(-14px);filter:drop-shadow(0 0 6px var(--gold2));}
@@ -525,20 +525,21 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
   pointer-events:none; opacity:0;
   transition:opacity .15s;
   z-index:5;
+  overflow:visible;
 }
 .bot-avatar.turn-glow .avatar-ring,
 .chip-avatar.turn-glow .avatar-ring{ opacity:1; }
 .avatar-ring .ring-bg{
   fill:none; stroke:rgba(0,0,0,.35); stroke-width:7;
+  stroke-dasharray:100; stroke-dashoffset:0;
 }
 .avatar-ring .ring-fg{
   fill:none; stroke:#44ff88; stroke-width:7;
-  stroke-linecap:round;
-  stroke-dasharray:289;
+  stroke-linejoin:round;
+  stroke-dasharray:100;
   stroke-dashoffset:0;
-  transform:rotate(-90deg);
-  transform-origin:50% 50%;
   filter:drop-shadow(0 0 4px currentColor);
+  will-change: stroke-dashoffset, stroke;
 }
 .bot-avatar.turn-glow .avatar-ring .ring-fg,
 .chip-avatar.turn-glow .avatar-ring .ring-fg{
@@ -546,7 +547,7 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
 }
 @keyframes ring-drain{
   from { stroke-dashoffset: 0;   }
-  to   { stroke-dashoffset: 289; }
+  to   { stroke-dashoffset: 100; }
 }
 @keyframes ring-color{
   0%   { stroke:#44ff88; }

@@ -155,15 +155,8 @@ function drawSuit(ctx, suit, cx, cy, px, col) {
       if (m[r] && m[r][c]) ctx.fillRect(ox + c * px, oy + r * px, px, px);
 }
 
-function makeCard(card, sc) {
-  const w = CW * sc, h = CH * sc;
-  const cv = document.createElement('canvas');
-  cv.width = w; cv.height = h;
-  cv.style.width = w + 'px'; cv.style.height = h + 'px';
-  const ctx = cv.getContext('2d');
-
+function _drawCardInto(ctx, card, sc, w, h) {
   if (card.r === 'JK') {
-
     ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, w, h);
     ctx.fillStyle = '#aaaaaa';
     ctx.fillRect(0, 0, w, sc);      ctx.fillRect(0, h - sc, w, sc);
@@ -173,36 +166,52 @@ function makeCard(card, sc) {
     drawSuit(ctx, '★', Math.floor(w / 2), Math.floor(h / 2), Math.floor(sc * 2.5), '#cc8800');
     drawGlyph(ctx, 'J', w - sc * 6, h - sc * 16, sc, '#880000');
     drawGlyph(ctx, 'K', w - sc * 6, h - sc * 9,  sc, '#222222');
-    return cv;
+    return;
   }
-
   const col = isRed(card.s) ? '#8b0000' : '#1a1a1a';
-
   ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, w, h);
   ctx.fillStyle = '#aaaaaa';
   ctx.fillRect(0, 0, w, sc);     ctx.fillRect(0, h - sc, w, sc);
   ctx.fillRect(0, 0, sc, h);     ctx.fillRect(w - sc, 0, sc, h);
-
   const rk = card.r;
-
   drawRank(ctx, rk, sc * 2, sc * 2, sc, col);
-
   const suitPx = Math.round(sc * 2.5);
   drawSuit(ctx, card.s, Math.floor(w / 2), Math.floor(h / 2), suitPx, col);
-
   const rkW = rk === '10' ? 8 : 4;
   drawRank(ctx, rk, w - rkW * sc - sc * 2, h - sc * 2 - sc * 6, sc, col);
-
-  return cv;
 }
 
-function makeBack(sc) {
+const _cardSrcCache = new Map();
+function _getCardSource(card, sc) {
+  const key = card.r + card.s + ':' + sc;
+  let src = _cardSrcCache.get(key);
+  if (src) return src;
   const w = CW * sc, h = CH * sc;
+  src = document.createElement('canvas');
+  src.width = w; src.height = h;
+  _drawCardInto(src.getContext('2d'), card, sc, w, h);
+  _cardSrcCache.set(key, src);
+  return src;
+}
+
+function makeCard(card, sc) {
+  const w = CW * sc, h = CH * sc;
+  const src = _getCardSource(card, sc);
   const cv = document.createElement('canvas');
   cv.width = w; cv.height = h;
   cv.style.width = w + 'px'; cv.style.height = h + 'px';
-  const ctx = cv.getContext('2d');
+  cv.getContext('2d').drawImage(src, 0, 0);
+  return cv;
+}
 
+const _backCache = new Map();
+function _getBackSource(sc) {
+  let src = _backCache.get(sc);
+  if (src) return src;
+  const w = CW * sc, h = CH * sc;
+  src = document.createElement('canvas');
+  src.width = w; src.height = h;
+  const ctx = src.getContext('2d');
   ctx.fillStyle = '#1a0820'; ctx.fillRect(0, 0, w, h);
   ctx.fillStyle = '#cc2266';
   ctx.fillRect(0, 0, w, sc);    ctx.fillRect(0, h - sc, w, sc);
@@ -210,12 +219,22 @@ function makeBack(sc) {
   ctx.fillStyle = '#660033';
   ctx.fillRect(sc, sc, w - 2*sc, sc);    ctx.fillRect(sc, h - 2*sc, w - 2*sc, sc);
   ctx.fillRect(sc, sc, sc, h - 2*sc);    ctx.fillRect(w - 2*sc, sc, sc, h - 2*sc);
-
   ctx.fillStyle = '#3d0a25';
   for (let y = sc*3; y < h - sc*2; y += sc*4)
     for (let x = sc*3; x < w - sc*2; x += sc*4) {
       ctx.fillRect(x, y, sc, sc);
       ctx.fillRect(x + sc*2, y + sc*2, sc, sc);
     }
+  _backCache.set(sc, src);
+  return src;
+}
+
+function makeBack(sc) {
+  const w = CW * sc, h = CH * sc;
+  const src = _getBackSource(sc);
+  const cv = document.createElement('canvas');
+  cv.width = w; cv.height = h;
+  cv.style.width = w + 'px'; cv.style.height = h + 'px';
+  cv.getContext('2d').drawImage(src, 0, 0);
   return cv;
 }

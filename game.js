@@ -298,13 +298,17 @@ let _hcardsScrollTime = 0;
     const svg = document.createElementNS(SVG_NS, 'svg');
     svg.setAttribute('class', 'avatar-ring');
     svg.setAttribute('viewBox', '0 0 100 100');
-    const bg = document.createElementNS(SVG_NS, 'circle');
-    bg.setAttribute('class', 'ring-bg');
-    bg.setAttribute('cx', '50'); bg.setAttribute('cy', '50'); bg.setAttribute('r', '46');
-    const fg = document.createElementNS(SVG_NS, 'circle');
-    fg.setAttribute('class', 'ring-fg');
-    fg.setAttribute('cx', '50'); fg.setAttribute('cy', '50'); fg.setAttribute('r', '46');
-    svg.appendChild(bg); svg.appendChild(fg);
+    const mk = cls => {
+      const r = document.createElementNS(SVG_NS, 'rect');
+      r.setAttribute('class', cls);
+      r.setAttribute('x', '4'); r.setAttribute('y', '4');
+      r.setAttribute('width', '92'); r.setAttribute('height', '92');
+      r.setAttribute('rx', '6'); r.setAttribute('ry', '6');
+      r.setAttribute('pathLength', '100');
+      return r;
+    };
+    svg.appendChild(mk('ring-bg'));
+    svg.appendChild(mk('ring-fg'));
     av.appendChild(svg);
   });
 })();
@@ -346,7 +350,12 @@ let _hcardsScrollTime = 0;
   }
   window.addEventListener('resize', fit);
 
+  const titleEl = document.getElementById('title');
   function tick(){
+    if (titleEl && titleEl.classList.contains('off')) {
+      requestAnimationFrame(tick);
+      return;
+    }
     fit();
     if (W && H) {
       ctx.clearRect(0,0,W,H);
