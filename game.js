@@ -1002,9 +1002,18 @@ function playerPlaySelected() {
   if (G.turn!==mp||G.finished.includes(mp)||G.gameOver||G.busy) return;
   const sel = G.hands[mp].filter(c => c.sel);
   if (!sel.length) { toast('ВЫБЕРИТЕ КАРТЫ'); return; }
-  if (typeof MP !== 'undefined' && MP.active && MP.seat > 0
-      && typeof mpGuestPlay === 'function') {
+  const inMP = (typeof MP !== 'undefined' && MP.active);
+  if (inMP && MP.seat > 0 && typeof mpGuestPlay === 'function') {
     mpGuestPlay(sel.map(c => c.id)); return;
+  }
+  if (inMP && MP.seat === 0) {
+    // Хост в MP: фиксируем ход немедленно, без flyCards.
+    // (flyCards-анимация ненадёжна когда state нужно срочно разослать.)
+    const res = validate(sel);
+    if (!res.ok) { sndError(); toast(res.msg); return; }
+    sndCard();
+    commitPlay(mp, sel, res);
+    return;
   }
   tryPlayerPlay(sel);
 }

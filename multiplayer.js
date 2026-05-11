@@ -119,7 +119,8 @@ function mpConnect(onOpen) {
   MP.ws.onopen    = () => { opened = true; mlog('WS open'); if (onOpen) onOpen(); };
   MP.ws.onmessage = e => {
     let m; try { m = JSON.parse(e.data); } catch (_) { return; }
-    mlog('recv', m.type, m);
+    const k = (m.data && m.data.k) ? m.data.k : '';
+    mlog('recv', m.type, k, 'from=', m.from, m);
     mpHandleMsg(m);
   };
   MP.ws.onerror   = () => { mpSetStatus('Нет связи с сервером', '#ff5555'); };
@@ -139,7 +140,9 @@ function mpSend(obj) {
   if (!MP.ws || MP.ws.readyState !== WebSocket.OPEN) return false;
   try {
     MP.ws.send(JSON.stringify(obj));
-    mlog('send', obj.type, obj);
+    const k = (obj.data && obj.data.k) ? obj.data.k : '';
+    const tg = (obj.target !== undefined) ? ('→' + obj.target) : '→ALL';
+    mlog('send', obj.type, k, tg, obj);
     return true;
   } catch (_) { return false; }
 }
@@ -218,13 +221,14 @@ function mpHandleMsg(msg) {
       mpStartGame();
       return;
 
-    case 'relay':
+    case 'relay': {
       const data = msg.data;
       const from = msg.from;
       if (!data) return;
       if (MP.seat === 0) mpHostHandle(from, data);
       else               mpGuestHandle(from, data);
       return;
+    }
 
     case 'opponent_left':
       // Если ушёл хост — игра не может продолжаться, все возвращаются в меню.
@@ -305,7 +309,10 @@ function mpSendState() {
     k: 'state',
     seq: MP.stateSeq,
     hands: G.hands.map(h => h ? h.map(c => ({ r: c.r, s: c.s, id: c.id })) : []),
-    currentCombo: G.currentCombo,
+    currentCombo: G.currentCombo
+      ? { cards: G.currentCombo.cards.map(c => ({ r: c.r, s: c.s, id: c.id })),
+          rank: G.currentCombo.rank, count: G.currentCombo.count }
+      : null,
     revolution:   G.revolution,
     turn:         G.turn,
     passCount:    G.passCount,
@@ -315,6 +322,8 @@ function mpSendState() {
     roundNum:     G.roundNum || 1,
     numPlayers:   G.numPlayers,
   };
+  mlog('host sendState seq=', MP.stateSeq, 'turn=', G.turn,
+       'combo=', state.currentCombo);
   mpSend({ type: 'relay', data: state });    // без target = всем гостям
 }
 
@@ -326,6 +335,8 @@ function mpRequestSync() {
 
 // ── ГОСТЬ ← ХОСТ: применяем состояние ──────────────────────
 function mpGuestHandle(fromSeat, data) {
+  mlog('guest handle', data && data.k, 'seq=', data && data.seq);
+
   if (data.k === 'err') {
     sndError(); toast(data.msg || 'НЕЛЬЗЯ');
     if (G) G.busy = false;
@@ -334,9 +345,11 @@ function mpGuestHandle(fromSeat, data) {
   }
   if (data.k !== 'state') return;
 
-  // Игнорируем устаревшие state-пакеты, пришедшие не по порядку
   if (typeof data.seq === 'number') {
-    if (data.seq <= MP.lastSeq) return;
+    if (data.seq <= MP.lastSeq) {
+      mlog('guest: skip old seq', data.seq, '<=', MP.lastSeq);
+      return;
+    }
     MP.lastSeq = data.seq;
   }
 
@@ -390,26 +403,31 @@ function mpGuestPass() {
 
 // ── ХОСТ ← ГОСТЬ: обработать действие ──────────────────────
 function mpHostHandle(fromSeat, data) {
-  // Запрос на ресинк может прийти когда угодно
+  mlog('host handle', data && data.k, 'from=', fromSeat,
+       'turn=', G && G.turn, 'busy=', G && G.busy);
+
   if (data.k === 'sync_req') { mpSendState(); return; }
 
-  if (!G || G.gameOver) return;
+  if (!G || G.gameOver) { mlog('host: game not active'); return; }
 
-  // Если что-то не сходится — просто шлём свежее состояние, гость пересинхронизируется.
   if (G.turn !== fromSeat || (G.finished && G.finished.includes(fromSeat))) {
+    mlog('host: wrong turn, resyncing');
     mpSendState(); return;
   }
 
   if (data.k === 'pass') {
+    mlog('host: applying PASS from', fromSeat);
     sndPass();
     doPass(fromSeat);
     return;
   }
-  if (data.k === 'play') {
-    if (!G.hands || !G.hands[fromSeat]) { mpSendState(); return; }
 
+  if (data.k === 'play') {
+    if (!G.hands || !G.hands[fromSeat]) {
+      mlog('host: no hand for', fromSeat);
+      mpSendState(); return;
+    }
     const ids = data.cardIds || [];
-    // Защита от дубликатов: один и тот же ID не должен играться дважды
     if (new Set(ids).size !== ids.length) {
       mpSend({ type:'relay', target: fromSeat,
                data:{ k:'err', msg:'ДУБЛИКАТЫ КАРТ' }});
@@ -420,18 +438,23 @@ function mpHostHandle(fromSeat, data) {
       .map(id => G.hands[fromSeat].find(c => c && c.id === id))
       .filter(Boolean);
     if (!cards.length || cards.length !== ids.length) {
+      mlog('host: cards not found', ids);
       mpSendState(); return;
     }
-
     const res = validate(cards);
     if (!res.ok) {
+      mlog('host: invalid play —', res.msg);
       mpSend({ type:'relay', target: fromSeat, data:{ k:'err', msg:res.msg }});
       mpSendState();
       return;
     }
+    mlog('host: applying PLAY from', fromSeat, ids);
     sndCard();
-    flyCards(cards, cards.map(() => getBotPos(fromSeat)),
-             () => commitPlay(fromSeat, cards, res));
+    // ВАЖНО: для гостевых ходов НЕ ждём flyCards-анимацию.
+    // Анимация — чисто визуальная штука для локального игрока, и из-за
+    // setTimeout/gameAlive может зависнуть так, что commitPlay никогда
+    // не вызовется и state не разошлётся. Применяем сразу.
+    commitPlay(fromSeat, cards, res);
   }
 }
 
