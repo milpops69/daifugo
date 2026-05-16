@@ -298,6 +298,14 @@ function mpGuestHandle(fromSeat, data) {
     mpUpdateRematchUi(data.votes, data.total);
     return;
   }
+  if (data.k === 'exchange_init') {
+    mpClientExchInit(data);
+    return;
+  }
+  if (data.k === 'exchange_done') {
+    mpClientExchDone(data);
+    return;
+  }
   if (data.k !== 'state') return;
 
   if (typeof data.seq === 'number') {
@@ -407,6 +415,15 @@ function mpHostHandle(fromSeat, data) {
     return;
   }
 
+  if (data.k === 'exchange_pick') {
+    _mpHostReceivePick(fromSeat, data.cardIds || []);
+    return;
+  }
+  if (data.k === 'exchange_ready') {
+    _mpHostReceiveReady(fromSeat);
+    return;
+  }
+
   if (!G || G.gameOver) return;
 
   if (G.turn !== fromSeat || (G.finished && G.finished.includes(fromSeat))) {
@@ -478,7 +495,178 @@ function mpCheckRematchStart() {
   const btn = document.getElementById('again-btn');
   if (btn) { btn.disabled = false; btn.textContent = '▶ ЕЩЁ РАЗ'; }
   document.getElementById('overlay').classList.add('h');
-  newGame();
+
+  if (prevRankings && prevRankings.length === MP.numPlayers) {
+    mpStartExchange();
+  } else {
+    newGame();
+  }
+}
+
+let _mpExchHost = null;
+let _mpExchClient = null;
+
+function mpStartExchange() {
+  const N = MP.numPlayers;
+  const deck = shuffle(mkDeck());
+  const hands = Array.from({length: N}, () => []);
+  deck.forEach((c, i) => hands[i % N].push(c));
+  hands.forEach(h => h.sort((a, b) => STR[a.r] - STR[b.r]));
+
+  const byRank = new Array(N);
+  prevRankings.forEach(r => byRank[r.rank] = r.player);
+
+  const exchanges = [];
+  if (N >= 4) {
+    exchanges.push({ winner: byRank[0], loser: byRank[N-1], count: 2 });
+    exchanges.push({ winner: byRank[1], loser: byRank[N-2], count: 1 });
+  } else if (N === 3) {
+    exchanges.push({ winner: byRank[0], loser: byRank[2], count: 1 });
+  } else if (N === 2) {
+    exchanges.push({ winner: byRank[0], loser: byRank[1], count: 1 });
+  }
+
+  exchanges.forEach(e => {
+    e.loserGives = hands[e.loser].slice(-e.count).map(c => ({r:c.r, s:c.s, id:c.id}));
+    e.loserGives.forEach(card => {
+      const i = hands[e.loser].findIndex(c => c.id === card.id);
+      if (i >= 0) hands[e.loser].splice(i, 1);
+    });
+  });
+
+  _mpExchHost = {
+    hands, exchanges,
+    pendingPickers: new Set(exchanges.map(e => e.winner)),
+    picks: {},
+    ready: new Set(),
+    rankings: prevRankings.slice(),
+  };
+
+  for (let seat = 0; seat < N; seat++) {
+    const init = _mpBuildExchInit(seat, hands[seat], exchanges, prevRankings);
+    if (seat === 0) {
+      mpClientExchInit(init);
+    } else {
+      mpSend({ type:'relay', target: seat, data: { k:'exchange_init', ...init }});
+    }
+  }
+}
+
+function _mpBuildExchInit(seat, hand, exchanges, rankings) {
+  let role = { type: 'middle' };
+  for (const e of exchanges) {
+    if (e.winner === seat) {
+      role = { type:'pick', count:e.count, partnerSeat:e.loser, recv:e.loserGives };
+      break;
+    }
+    if (e.loser === seat) {
+      role = { type:'auto', count:e.count, partnerSeat:e.winner, gave:e.loserGives };
+      break;
+    }
+  }
+  const myRank = (rankings.find(r => r.player === seat) || {}).rank;
+  return {
+    role: role.type,
+    count: role.count || 0,
+    partnerSeat: (role.partnerSeat == null) ? -1 : role.partnerSeat,
+    partnerName: (role.partnerSeat != null && NAMES[role.partnerSeat])
+                  ? NAMES[role.partnerSeat] : '',
+    hand: hand.map(c => ({r:c.r, s:c.s, id:c.id})),
+    recv: role.recv || [],
+    gave: role.gave || [],
+    myRank: (myRank == null) ? -1 : myRank,
+  };
+}
+
+function mpClientExchInit(data) {
+  _mpExchClient = { init: data, picked: new Set() };
+  if (typeof showMpExchUI === 'function') showMpExchUI(data);
+}
+
+function mpSendExchPick(cardIds) {
+  if (!_mpExchClient) return;
+  if (MP.seat === 0) {
+    _mpHostReceivePick(0, cardIds);
+  } else {
+    mpSend({ type:'relay', target: 0, data:{ k:'exchange_pick', cardIds }});
+  }
+  if (typeof showMpExchWaiting === 'function') showMpExchWaiting();
+}
+
+function _mpHostReceivePick(seat, cardIds) {
+  if (!_mpExchHost) return;
+  const exch = _mpExchHost.exchanges.find(e => e.winner === seat);
+  if (!exch) return;
+  const myHand = _mpExchHost.hands[seat];
+  const picked = (cardIds || [])
+    .map(id => myHand.find(c => c.id === id))
+    .filter(Boolean);
+  if (picked.length !== exch.count) {
+    return;
+  }
+  _mpExchHost.picks[seat] = picked.map(c => ({r:c.r, s:c.s, id:c.id}));
+  _mpExchHost.pendingPickers.delete(seat);
+
+  picked.forEach(card => {
+    const i = myHand.findIndex(c => c.id === card.id);
+    if (i >= 0) myHand.splice(i, 1);
+  });
+  exch.loserGives.forEach(c => myHand.push({...c, sel:false}));
+
+  const lh = _mpExchHost.hands[exch.loser];
+  picked.forEach(c => lh.push({...c, sel:false}));
+
+  if (_mpExchHost.pendingPickers.size === 0) {
+    _mpExchHost.hands.forEach(h => h.sort((a,b) => STR[a.r]-STR[b.r]));
+    for (let seat = 0; seat < MP.numPlayers; seat++) {
+      const done = _mpBuildExchDone(seat);
+      if (seat === 0) {
+        mpClientExchDone(done);
+      } else {
+        mpSend({ type:'relay', target: seat, data:{ k:'exchange_done', ...done }});
+      }
+    }
+  }
+}
+
+function _mpBuildExchDone(seat) {
+  const exchanges = _mpExchHost.exchanges;
+  let gave = [], received = [];
+  for (const e of exchanges) {
+    if (e.winner === seat) { gave = _mpExchHost.picks[seat] || []; received = e.loserGives; break; }
+    if (e.loser === seat)  { gave = e.loserGives; received = _mpExchHost.picks[e.winner] || []; break; }
+  }
+  return {
+    hand: _mpExchHost.hands[seat].map(c => ({r:c.r, s:c.s, id:c.id})),
+    gave, received,
+  };
+}
+
+function mpClientExchDone(data) {
+  if (!_mpExchClient) _mpExchClient = {};
+  _mpExchClient.done = data;
+  if (typeof showMpExchResult === 'function') showMpExchResult(data);
+}
+
+function mpExchReady() {
+  if (MP.seat === 0) {
+    _mpHostReceiveReady(0);
+  } else {
+    mpSend({ type:'relay', target: 0, data:{ k:'exchange_ready' }});
+  }
+  if (typeof showMpExchWaitingFinal === 'function') showMpExchWaitingFinal();
+}
+
+function _mpHostReceiveReady(seat) {
+  if (!_mpExchHost) return;
+  _mpExchHost.ready.add(seat);
+  if (_mpExchHost.ready.size >= MP.numPlayers) {
+    const finalHands = _mpExchHost.hands;
+    _mpExchHost = null;
+    _mpExchClient = null;
+    document.getElementById('exchange-overlay').classList.add('h');
+    startGameWithHands(finalHands);
+  }
 }
 
 function mpUpdateRematchUi(votes, total) {

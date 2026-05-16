@@ -201,7 +201,7 @@ function goTitle() {
 
   GAME_GEN++;
   if (G) G.aborted = true;
-  _pileSig = null; _lastTimerTurn = -1; clearTurnTimer();
+  _pileSig = null; _lastTimerTurn = -1; _lastMyRank = -1; clearTurnTimer();
   G = { hands:[[],[],[],[]], currentCombo:null, pile:[], revolution:false,
         turn:0, passCount:0, finished:[], rankings:[], gameOver:true, busy:false,
         aborted:true, numPlayers: 4 };
@@ -487,6 +487,7 @@ function startGameWithHands(hands) {
   _pileSig = null;
   _lastTimerTurn = -1;
   _glowSeat = null;
+  _lastMyRank = -1;
 
   const _pcInit = document.getElementById('pcards');
   if (_pcInit) _pcInit.innerHTML = '';
@@ -609,6 +610,7 @@ function renderExchangeUI(rankings) {
   const body  = document.getElementById('ex-body');
   const hand  = document.getElementById('ex-hand');
   const btn   = document.getElementById('ex-btn');
+  btn.onclick = confirmExchange;
 
   if (exchangeMode === 'give2') {
     title.textContent = '◈ ОБМЕН КАРТАМИ ◈';
@@ -686,6 +688,120 @@ function confirmExchange() {
 
 function updateScoreDisplay() {}
 
+function showMpExchUI(data) {
+  document.getElementById('overlay').classList.add('h');
+  document.getElementById('exchange-overlay').classList.remove('h');
+  const title = document.getElementById('ex-title');
+  const body  = document.getElementById('ex-body');
+  const hand  = document.getElementById('ex-hand');
+  const btn   = document.getElementById('ex-btn');
+  title.textContent = '◈ ОБМЕН КАРТАМИ ◈';
+  hand.innerHTML = '';
+
+  const myRank = data.myRank;
+  const rankName = (myRank >= 0 && myRank < RANK_NAMES.length) ? RANK_NAMES[myRank] : '';
+  const clr = (myRank >= 0 && myRank < RCLR.length) ? RCLR[myRank] : '#ffaadd';
+
+  if (data.role === 'pick') {
+    const need = data.count;
+    const recvStr = (data.recv || []).map(c => c.r + c.s).join(', ');
+    body.innerHTML = '<span style="color:' + clr + '">Вы — ' + rankName + '!</span> '
+                   + 'Выберите ' + need + ' карт' + (need===1?'у':'') + ' для передачи игроку <b>'
+                   + (data.partnerName || 'сопернику') + '</b>.<br>'
+                   + '<span style="color:#ff88cc">Получите:</span> ' + recvStr;
+    btn.textContent = '✓ ПОДТВЕРДИТЬ ВЫБОР';
+    btn.disabled = true;
+    btn.onclick = mpExchConfirmPick;
+
+    _exchSelected = new Set();
+    _exchClientHand = (data.hand || []).map(c => ({...c, exSel:false}));
+    renderMpExchHand(need);
+    return;
+  }
+
+  if (data.role === 'auto') {
+    const givenStr = (data.gave || []).map(c => c.r + c.s).join(', ');
+    body.innerHTML = '<span style="color:' + clr + '">Вы — ' + rankName + '.</span><br>'
+                   + 'Автоматически отдаёте игроку <b>' + (data.partnerName || 'сопернику')
+                   + '</b>: <span style="color:#ff88cc">' + givenStr + '</span>.<br>'
+                   + '<i>Ожидаем, пока победитель выберет карты для вас…</i>';
+    btn.textContent = '◯ ОЖИДАНИЕ…';
+    btn.disabled = true;
+    btn.onclick = null;
+    return;
+  }
+
+  body.innerHTML = '<span style="color:' + clr + '">Вы — ' + rankName + '.</span><br>'
+                 + 'В этой партии вы не участвуете в обмене.<br>'
+                 + '<i>Ожидаем завершения обмена у других игроков…</i>';
+  btn.textContent = '◯ ОЖИДАНИЕ…';
+  btn.disabled = true;
+  btn.onclick = null;
+}
+
+let _exchSelected = null;
+let _exchClientHand = null;
+
+function renderMpExchHand(need) {
+  const hand = document.getElementById('ex-hand');
+  hand.innerHTML = '';
+  _exchClientHand.forEach(c => {
+    const wrap = document.createElement('div');
+    wrap.className = 'ex-card-wrap' + (c.exSel ? ' ex-sel' : '');
+    wrap.appendChild(makeCard(c, SC_HAND));
+    wrap.addEventListener('click', () => {
+      if (c.exSel) {
+        c.exSel = false; _exchSelected.delete(c.id);
+      } else if (_exchSelected.size < need) {
+        c.exSel = true; _exchSelected.add(c.id);
+      }
+      document.getElementById('ex-btn').disabled = _exchSelected.size !== need;
+      renderMpExchHand(need);
+    });
+    hand.appendChild(wrap);
+  });
+}
+
+function mpExchConfirmPick() {
+  if (!_exchSelected) return;
+  const ids = Array.from(_exchSelected);
+  mpSendExchPick(ids);
+}
+
+function showMpExchWaiting() {
+  const btn = document.getElementById('ex-btn');
+  const body = document.getElementById('ex-body');
+  if (btn) { btn.disabled = true; btn.textContent = '◯ ОЖИДАНИЕ…'; btn.onclick = null; }
+  if (body) body.innerHTML = '<i>Ожидаем завершения обмена у других игроков…</i>';
+  const hand = document.getElementById('ex-hand');
+  if (hand) hand.innerHTML = '';
+}
+
+function showMpExchResult(data) {
+  const title = document.getElementById('ex-title');
+  const body  = document.getElementById('ex-body');
+  const hand  = document.getElementById('ex-hand');
+  const btn   = document.getElementById('ex-btn');
+  title.textContent = '◈ ОБМЕН ЗАВЕРШЁН ◈';
+  hand.innerHTML = '';
+
+  const gave = (data.gave || []).map(c => c.r + c.s).join(', ') || '—';
+  const recv = (data.received || []).map(c => c.r + c.s).join(', ') || '—';
+  body.innerHTML = '<span style="color:#ff88cc">Вы отдали:</span> ' + gave + '<br>'
+                 + '<span style="color:#44ff88">Вы получили:</span> ' + recv;
+  btn.textContent = '▶ НАЧАТЬ ИГРУ';
+  btn.disabled = false;
+  btn.onclick = mpExchReady;
+  sndExchange();
+}
+
+function showMpExchWaitingFinal() {
+  const btn = document.getElementById('ex-btn');
+  const body = document.getElementById('ex-body');
+  if (btn) { btn.disabled = true; btn.textContent = '◯ ЖДЁМ ДРУГИХ…'; btn.onclick = null; }
+  if (body) body.innerHTML += '<br><i>Ждём остальных игроков…</i>';
+}
+
 function setAvatar(el, av) {
   if (!el) return;
   const ring = el.querySelector('.avatar-ring');
@@ -747,7 +863,6 @@ function assignBotPersonalities(N) {
     if (nm) nm.textContent = name;
     const avEl = document.getElementById(s.avEl);
     setAvatar(avEl, avatar);
-    if (avEl) avEl.style.setProperty('--bot-accent', accent);
   });
 
   if (inMP) {
@@ -766,7 +881,9 @@ function render() {
   renderBotHands();
   renderPile();
   renderActive();
+  renderRanks();
   renderStatus();
+  _maybeToastMyRank();
 
   const turnKey = G.gameOver ? 'over' : G.turn;
   if (turnKey !== _lastTimerTurn) {
@@ -775,6 +892,44 @@ function render() {
   }
   if (typeof mpSendState === 'function' && typeof MP !== 'undefined' && MP.active && MP.seat === 0)
     mpSendState();
+}
+
+function renderRanks() {
+  for (let i = 1; i <= 3; i++) {
+    const rb = document.getElementById('rb-' + i);
+    if (rb) { rb.className = 'chip-badge'; rb.textContent = ''; rb.style.display = 'none'; }
+    const brb = document.getElementById('brb-' + i);
+    if (brb) { brb.className = 'bot-rbadge'; brb.textContent = ''; brb.style.display = 'none'; }
+  }
+  if (!G || !G.rankings) return;
+  G.rankings.forEach(r => {
+    const disp = displayOf(r.player);
+    if (disp <= 0) return;
+    const rb = document.getElementById('rb-' + disp);
+    if (rb) {
+      rb.className = 'chip-badge ' + RCLS[r.rank];
+      rb.textContent = RANK_NAMES[r.rank];
+      rb.style.display = 'inline-block';
+    }
+    const brb = document.getElementById('brb-' + disp);
+    if (brb) {
+      brb.className = 'bot-rbadge ' + RCLS[r.rank];
+      brb.textContent = RANK_NAMES[r.rank];
+      brb.style.display = 'inline-block';
+    }
+  });
+}
+
+let _lastMyRank = -1;
+function _maybeToastMyRank() {
+  const me = myPlayer();
+  if (!G || !G.rankings || !G.rankings.length) { _lastMyRank = -1; return; }
+  const myR = G.rankings.find(r => r.player === me);
+  if (!myR) { _lastMyRank = -1; return; }
+  if (_lastMyRank !== myR.rank) {
+    _lastMyRank = myR.rank;
+    toast(RANK_NAMES[myR.rank].toUpperCase() + '!');
+  }
 }
 
 function renderCounts() {
@@ -1261,25 +1416,11 @@ function finishPlayer(who) {
   const ri = G.rankings.length;
   G.rankings.push({player:who, rank:ri});
 
-  const dispWho = displayOf(who);
-  const rb = document.getElementById('rb-'+dispWho);
-  if (rb) { rb.className='chip-badge '+RCLS[ri]; rb.textContent=RANK_NAMES[ri]; rb.style.display='inline-block'; }
-  const rb2 = document.getElementById('brb-'+dispWho);
-  if (rb2) { rb2.className='bot-rbadge '+RCLS[ri]; rb2.textContent=RANK_NAMES[ri]; rb2.style.display='inline-block'; }
-
-  toast(NAMES[who]+': '+RANK_NAMES[ri]+'!');
-
   const N = G.numPlayers || 4;
   if (N - G.finished.length <= 1) {
     for (let i=0; i<N; i++) if (!G.finished.includes(i)) {
       G.finished.push(i);
       G.rankings.push({player:i, rank:G.rankings.length});
-      const ri2 = G.rankings.length-1;
-      const dispI = displayOf(i);
-      const rb3 = document.getElementById('rb-'+dispI);
-      if (rb3) { rb3.className='chip-badge '+RCLS[ri2]; rb3.textContent=RANK_NAMES[ri2]; rb3.style.display='inline-block'; }
-      const brb3 = document.getElementById('brb-'+dispI);
-      if (brb3) { brb3.className='bot-rbadge '+RCLS[ri2]; brb3.textContent=RANK_NAMES[ri2]; brb3.style.display='inline-block'; }
     }
     G.gameOver=true; render();
     const gen2 = GAME_GEN;
