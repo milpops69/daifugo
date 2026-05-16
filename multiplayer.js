@@ -25,14 +25,54 @@ function mpProfileStatus(txt, col){
   if (b) { b.textContent = ''; }
 }
 
+let _customAvatarData = null;
+
 function mpReadProfile() {
   const inp  = document.getElementById('mp-name-input');
   const name = (inp && inp.value.trim()) || '';
   const sel  = document.querySelector('#mp-av-grid .mp-av.sel');
   if (!name) { mpProfileStatus('Введите ник', '#ff5555'); return null; }
   if (!sel)  { mpProfileStatus('Выберите аватар', '#ff5555'); return null; }
-  MP.profile = { name: name.slice(0, 12), avatar: parseInt(sel.dataset.av, 10) };
+  let avatar;
+  if (sel.id === 'mp-av-custom') {
+    if (!_customAvatarData) { mpProfileStatus('Загрузите картинку', '#ff5555'); return null; }
+    avatar = _customAvatarData;
+  } else {
+    avatar = parseInt(sel.dataset.av, 10);
+  }
+  MP.profile = { name: name.slice(0, 12), avatar };
   return MP.profile;
+}
+
+function mpHandleAvatarFile(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const img = new Image();
+    img.onload = () => {
+      const SIDE = 128;
+      const cv = document.createElement('canvas');
+      cv.width = SIDE; cv.height = SIDE;
+      const ctx = cv.getContext('2d');
+      const s = Math.min(img.width, img.height);
+      const sx = (img.width - s) / 2, sy = (img.height - s) / 2;
+      ctx.drawImage(img, sx, sy, s, s, 0, 0, SIDE, SIDE);
+      _customAvatarData = cv.toDataURL('image/jpeg', 0.78);
+      const cell = document.getElementById('mp-av-custom');
+      if (cell) {
+        cell.classList.add('has-img');
+        let im = cell.querySelector('img');
+        if (!im) { im = document.createElement('img'); cell.appendChild(im); }
+        im.src = _customAvatarData;
+        document.querySelectorAll('#mp-av-grid .mp-av').forEach(c => c.classList.remove('sel'));
+        cell.classList.add('sel');
+      }
+      mpProfileStatus('');
+    };
+    img.onerror = () => mpProfileStatus('Не удалось загрузить картинку', '#ff5555');
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
 }
 
 function mpToRoomStep(){
@@ -59,10 +99,19 @@ document.addEventListener('DOMContentLoaded', () => {
   if (grid) {
     const cells = grid.querySelectorAll('.mp-av');
     cells.forEach(c => c.addEventListener('click', () => {
+      if (c.id === 'mp-av-custom' && !_customAvatarData) {
+        const fi = document.getElementById('mp-av-file');
+        if (fi) fi.click();
+        return;
+      }
       cells.forEach(x => x.classList.remove('sel'));
       c.classList.add('sel');
     }));
   }
+  const fi = document.getElementById('mp-av-file');
+  if (fi) fi.addEventListener('change', e => {
+    if (e.target.files && e.target.files[0]) mpHandleAvatarFile(e.target.files[0]);
+  });
 
   const cnt = document.getElementById('mp-count-row');
   if (cnt) {
@@ -221,8 +270,12 @@ function mpUpdateRoster(players) {
     const row = document.createElement('div');
     row.className = 'row' + (p.seat === MP.seat ? ' me' : '');
     const img = document.createElement('img');
-    const idx = Math.max(0, Math.min(4, (p.avatar|0)));
-    img.src = `av${idx+1}.jpg`;
+    if (typeof p.avatar === 'string' && p.avatar.startsWith('data:')) {
+      img.src = p.avatar;
+    } else {
+      const idx = Math.max(0, Math.min(4, (p.avatar|0)));
+      img.src = `av${idx+1}.jpg`;
+    }
     img.alt = '';
     img.onerror = () => { img.onerror = null; img.src = 'av1.jpg'; };
     const nm = document.createElement('div');
@@ -521,7 +574,8 @@ function mpStartExchange() {
     exchanges.push({ winner: byRank[0], loser: byRank[N-1], count: 2 });
     exchanges.push({ winner: byRank[1], loser: byRank[N-2], count: 1 });
   } else if (N === 3) {
-    exchanges.push({ winner: byRank[0], loser: byRank[2], count: 1 });
+    exchanges.push({ winner: byRank[0], loser: byRank[2], count: 2 });
+    exchanges.push({ winner: byRank[1], loser: byRank[2], count: 1 });
   } else if (N === 2) {
     exchanges.push({ winner: byRank[0], loser: byRank[1], count: 1 });
   }
@@ -559,9 +613,18 @@ function _mpBuildExchInit(seat, hand, exchanges, rankings) {
       role = { type:'pick', count:e.count, partnerSeat:e.loser, recv:e.loserGives };
       break;
     }
-    if (e.loser === seat) {
-      role = { type:'auto', count:e.count, partnerSeat:e.winner, gave:e.loserGives };
-      break;
+  }
+  if (role.type === 'middle') {
+    let totalCount = 0, allGave = [], firstPartner = null;
+    for (const e of exchanges) {
+      if (e.loser === seat) {
+        totalCount += e.count;
+        allGave = allGave.concat(e.loserGives);
+        if (firstPartner === null) firstPartner = e.winner;
+      }
+    }
+    if (totalCount > 0) {
+      role = { type:'auto', count: totalCount, partnerSeat: firstPartner, gave: allGave };
     }
   }
   const myRank = (rankings.find(r => r.player === seat) || {}).rank;
@@ -633,8 +696,14 @@ function _mpBuildExchDone(seat) {
   const exchanges = _mpExchHost.exchanges;
   let gave = [], received = [];
   for (const e of exchanges) {
-    if (e.winner === seat) { gave = _mpExchHost.picks[seat] || []; received = e.loserGives; break; }
-    if (e.loser === seat)  { gave = e.loserGives; received = _mpExchHost.picks[e.winner] || []; break; }
+    if (e.winner === seat) {
+      gave = gave.concat(_mpExchHost.picks[seat] || []);
+      received = received.concat(e.loserGives);
+    }
+    if (e.loser === seat) {
+      gave = gave.concat(e.loserGives);
+      received = received.concat(_mpExchHost.picks[e.winner] || []);
+    }
   }
   return {
     hand: _mpExchHost.hands[seat].map(c => ({r:c.r, s:c.s, id:c.id})),

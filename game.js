@@ -206,6 +206,7 @@ function goTitle() {
         turn:0, passCount:0, finished:[], rankings:[], gameOver:true, busy:false,
         aborted:true, numPlayers: 4 };
   document.querySelectorAll('.toast').forEach(t => t.remove());
+  for (let i = 0; i < _toastSlots.length; i++) _toastSlots[i] = false;
   document.querySelectorAll('.pas-bubble').forEach(b => b.remove());
 
   document.querySelectorAll('body > canvas').forEach(c => c.remove());
@@ -850,7 +851,11 @@ function assignBotPersonalities(N) {
     if (inMP && peerBySeat[seat]) {
       const peer = peerBySeat[seat];
       name = peer.name || ('Игрок ' + (seat + 1));
-      avatar = AVATARS[Math.max(0, Math.min(AVATARS.length-1, peer.avatar|0))];
+      if (typeof peer.avatar === 'string' && peer.avatar.startsWith('data:')) {
+        avatar = { src: peer.avatar, emoji: '🖼' };
+      } else {
+        avatar = AVATARS[Math.max(0, Math.min(AVATARS.length-1, peer.avatar|0))];
+      }
       accent = _shuffledCols[pi % _shuffledCols.length];
     } else {
       name   = _shuffledNames[pi % _shuffledNames.length];
@@ -1582,7 +1587,19 @@ function botChoose(who, hand) {
   return nonJoker.length ? nonJoker[0].cards : cands[0].cards;
 }
 
+const _toastSlots = new Array(8).fill(false);
 function toast(msg) {
-  const t = document.createElement('div'); t.className='toast'; t.textContent=msg;
-  document.body.appendChild(t); setTimeout(()=>t.remove(),1900);
+  let slot = 0;
+  while (slot < _toastSlots.length && _toastSlots[slot]) slot++;
+  if (slot >= _toastSlots.length) slot = _toastSlots.length - 1;
+  _toastSlots[slot] = true;
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.textContent = msg;
+  t.style.setProperty('--toast-slot', slot);
+  document.body.appendChild(t);
+  setTimeout(() => {
+    _toastSlots[slot] = false;
+    t.remove();
+  }, 1900);
 }
